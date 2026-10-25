@@ -17,3 +17,17 @@ Mira 为 26 岁旅行摄影师。原 PDF 第 1 页把这组设定列为可选故
 眨眼是定时动画；嘴型是说话状态控制的开合示意，不是音素或音频振幅分析。Mock 使用假/模拟时钟，真实模式由播放开始/结束状态控制，实际听感和口型匹配未在本轮测试。打断立即闭嘴并取消旧回调；眼嘴同时动作不会用整张闭眼图盖掉嘴型。整体呼吸、侧倾/前倾是 CSS 示意动作，照片是独立剧情道具，没有手臂骨骼动画。
 
 运行映射：src/character-assets.ts；时钟：src/core/facial-animation.ts；合成：src/Character.tsx。无声工具验证范围见 docs/ACCEPTANCE.md；人工发现偏离 brief 与纠正过程见 AI_USAGE.md。
+
+## 已批准的五套上半身关键帧
+
+用户确认样图后接入以下原始文件。全部1024×1536 / 8bit RGBA，四角alpha=0，素材不做像素编辑，旧五张仍保留。新姿态使用完整身体，不叠旧眼嘴补丁。尚未制作连续逐帧动画。
+
+| 文件 | Library ID | 字节数 | 完全透明像素 |
+|---|---|---:|---:|
+| mira-amber-thinking-upperbody-v1.png | libfile_301d0c99341881919cdecc48ca16ee9c | 2244059 | 565977 |
+| mira-amber-laughing-upperbody-v1.png | libfile_bc27d9ddcc688191a85856eba58db7a5 | 2284193 | 515581 |
+| mira-amber-listening-upperbody-v1.png | libfile_b0fd00b86dc481918edbe53ee1a8d552 | 2286352 | 514174 |
+| mira-amber-surprised-upperbody-v2.png | libfile_306f4f8664248191b1b85f1713328a7f | 2247727 | 532493 |
+| mira-amber-hesitant-upperbody-v1.png | libfile_011556a08a808191b52a044fa407c796 | 2251939 | 571461 |
+
+全身alpha沿用生成资源0–254范围，部分透明边缘保留。触发、优先级、失败回退与实际验证边界见[姿态说明](../../../docs/POSES.md)。基础neutral与局部差分规则仅适用于idle姿态。

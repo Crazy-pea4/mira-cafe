@@ -1,3 +1,4 @@
+import { characterPose } from '../src/core/character-pose';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { ConversationEngine } from '../src/core/engine';
 import { AudioPlaybackBlocked, type AudioPlayer } from '../src/core/audio';
@@ -31,6 +32,23 @@ function response(id: number, text = '这是本轮回复。'): TurnResponse { re
 const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 afterEach(() => vi.useRealTimers());
 describe('conversation cancellation and presentation', () => {
+  it('owns semantic poses only from playback start until completion or interruption, including late callbacks', async () => {
+    const {transport,audio,engine}=setup();
+    const run=engine.submit('逗你笑');
+    expect(characterPose(engine.getSnapshot())).toBe('thinking');
+    transport.calls[0].task.resolve({turnId:1,provider:'mock',segments:[{text:'真的被你逗笑了。',emotion:'relieved',action:'laughing'}]});
+    await flush(); expect(characterPose(engine.getSnapshot())).toBe('thinking');
+    audio.calls[0].start();expect(characterPose(engine.getSnapshot())).toBe('laughing');
+    engine.interrupt(true);await run;
+    expect(characterPose(engine.getSnapshot())).toBe('listening');
+    audio.calls[0].start();expect(characterPose(engine.getSnapshot())).toBe('listening');
+    engine.endListening();expect(characterPose(engine.getSnapshot())).toBe('idle');
+    const next=engine.submit('先慢慢来');
+    transport.calls[1].task.resolve({turnId:engine.getSnapshot().turnId,provider:'mock',segments:[{text:'我有一点犹豫。',emotion:'guarded',action:'hesitant'}]});
+    await flush();audio.calls[1].start();expect(characterPose(engine.getSnapshot())).toBe('hesitant');
+    audio.calls[1].task.resolve();await next;expect(characterPose(engine.getSnapshot())).toBe('idle');
+    engine.reset();expect(characterPose(engine.getSnapshot())).toBe('idle');
+  });
   it('drops an old response that ignores cancellation and arrives after the new one', async () => {
     const { transport, audio, engine } = setup();
     const old = engine.submit('old'); const fresh = engine.submit('new');

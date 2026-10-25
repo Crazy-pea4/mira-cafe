@@ -49,6 +49,8 @@ const SYSTEM = [
   '只输出一个JSON对象，顶层必须且只能有segments数组，不要代码块、解释、包装对象或工具调用。',
   'segments必须包含1–2个对象；每个对象必须有非空text、emotion、action。text为对白字符串，每段最多120字。',
   'emotion只允许：'+emotionSchema.options.join('/')+'；action只允许：'+actionSchema.options.join('/')+'。',
+  'action表现身体姿态：laughing仅用于确实被逗笑或轻松玩笑；surprised用于意外消息或惊讶；hesitant用于不确定、欲言又止或担心。普通回应使用idle；不每句换姿势，不把释然一律变成大笑。倾听和思考由客户端交互状态控制，不返回listening/thinking。',
+  '姿态格式示例（确实被逗笑时）：'+JSON.stringify({segments:[{text:'你这么一说，我倒真的笑出来了。',emotion:'relieved',action:'laughing'}]}),
   '可选scene只允许：'+sceneSchema.options.join('/')+'；可选event只允许reveal-photo。不使用时省略字段，不写null或none，不添加其他字段。',
   '示例：'+JSON.stringify({segments:[{text:'雨还没停，坐一会儿吧。',emotion:'guarded',action:'look-window'}]}),
   '完整字段示例（仅照片话题）：'+JSON.stringify({segments:[{text:'这是我旅途中拍的照片。',emotion:'curious',action:'offer-photo',event:'reveal-photo'},{text:'看着它，心里慢慢亮起来了。',emotion:'relieved',action:'idle',scene:'warm'}]}),

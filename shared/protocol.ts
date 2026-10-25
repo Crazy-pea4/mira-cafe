@@ -3,7 +3,7 @@ import { stageCueSchema } from './stage';
 import { sentences } from './story';
 import { storyBeatSchema, storyProposalSchema, suggestionSchema } from './story';
 export const emotionSchema = z.enum(['guarded', 'curious', 'relieved']);
-export const actionSchema = z.enum(['idle', 'look-window', 'offer-photo']);
+export const actionSchema = z.enum(['idle', 'look-window', 'offer-photo', 'laughing', 'surprised', 'hesitant']);
 export const sceneSchema = z.enum(['rain', 'warm']);
 const dialogueSegmentSchema = z.object({
   text: z.string().trim().min(1).max(180),
