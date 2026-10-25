@@ -9,11 +9,12 @@ import { LocalSpeechTransport } from './core/speech-transport';
 import { ConversationEngine } from './core/engine';
 import { HttpTransport } from './core/transport';
 import { Character } from './Character';
+import { Narrative } from './Narrative';
 import { Suggestions } from './Suggestions';
 import { ModeBadge } from './ModeBadge';
 import { SCENE_ARTWORK } from './scene-artwork';
 import { UserMessage, type InputSource } from './UserMessage';
-const STATUS = { idle: '在等你开口', listening: '正在倾听', thinking: '正在想怎么说', speaking: '正在说话', error: '连接暂时中断' };
+const STATUS = { idle: '在等你开口', listening: '正在倾听', thinking: '正在想怎么说', speaking: '正在说话', narrating:'', error: '连接暂时中断' };
 export function App() {
   const [{ engine, audio, entry }] = useState(() => {
     const audio = new SceneAudio(), voice = new VoiceInput(new LocalSpeechTransport());
@@ -50,7 +51,7 @@ export function App() {
     notice: message => engine.inputNotice(message),
     end: () => engine.endListening(),
   }); };
-  const active = state.status === 'speaking' || state.status === 'thinking';
+  const active = state.status === 'speaking' || state.status === 'thinking' || state.status==='narrating';
   return <main className={`app scene-${state.scene}`}>
     <div className="ambient-grain"/>
     <header className="topbar">
@@ -68,12 +69,12 @@ export function App() {
       <div className="place-label"><span className="tiny-star">✦</span> 23:47 <span>·</span> 城市一隅</div>
       <div className="character-wrap"><Character state={state}/></div>
       <div className="table"><div className="coffee"><i/><i/><span/></div><div className="table-note">stay a little longer.</div></div>
-      {state.photo && <div className="memory-card" role="img" aria-label="Mira 展示的照片：雨后山间的一间小旅馆"><div className="photo-landscape"><i/><b/><em className="photo-inn"/></div><p>山间的小旅馆 <span>09 / 12</span></p></div>}
+
       <div className="dialogue-area">
         <div className="character-meta"><div><span className="name">Mira</span><span className="descriptor">旅行摄影师 · 26</span></div><span className={`state-badge ${state.status}`} data-testid="state"><i/>{STATUS[state.status]}</span></div>
         <div className="subtitle-box">
           {state.status === 'error' ? <div className="error-content" role="alert"><span>{state.error}</span><button onClick={() => void engine.retry()}>{provider === 'deepseek' ? '重新请求（会计费）' : '重试这一句 ↻'}</button></div>
-            : <p aria-live="polite" data-testid="subtitle">{state.status === 'listening' ? (input.mode === 'live' ? '我在听。' : '松开后，就从这个话题聊起吧。') : state.subtitle || (state.status === 'thinking' ? <span className="thinking-dots"><i/><i/><i/></span> : '你可以继续说，我在这里。')}</p>}
+            : <p aria-live="polite" data-testid="subtitle">{state.status === 'listening' ? (input.mode === 'live' ? '我在听。' : '松开后，就从这个话题聊起吧。') : state.subtitle || (state.status==='narrating'?'…':state.status === 'thinking' ? <span className="thinking-dots"><i/><i/><i/></span> : '你可以继续说，我在这里。')}</p>}
           {active && <button className="interrupt" onClick={() => engine.interrupt()} aria-label="立即打断当前回复">■ 打断</button>}
         </div>
         {state.notice && !(input.showMessage && state.notice === input.message) && <div className="notice" role="status">{state.notice}</div>}
@@ -81,6 +82,7 @@ export function App() {
       </div>
     </section>
     <section className="interaction" aria-label="与 Mira 对话">
+      <Narrative text={state.narration} props={state.stageProps} revealed={state.photo}/>
       <UserMessage text={state.lastInput} source={inputSource}/>
       <Suggestions values={state.suggestions} onChoose={value=>send(value)}/>
       <form className="composer" onSubmit={event => { event.preventDefault(); send(text); }}>

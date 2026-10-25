@@ -1,28 +1,30 @@
 import type { Action, CharacterStatus, Emotion, Fault, History, Reply, Scene } from '../../shared/protocol';
-import { turnResponseSchema, REPLY_TEXT_ONLY_NOTICE } from '../../shared/protocol';
+import { turnResponseSchema, REPLY_TEXT_ONLY_NOTICE, presentationUnits } from '../../shared/protocol';
 import { delay, isAbort } from '../../shared/async';
 import { AudioPlaybackBlocked, AUDIO_BLOCKED_NOTICE, type AudioPlayer } from './audio';
 import { STORY_OPENING, INITIAL_SUGGESTIONS, sentences, type StoryView } from '../../shared/story';
+import { OPENING_NARRATION, INITIAL_PROPS, applyCue, type StageProps } from '../../shared/stage';
 import type { Transport } from './transport';
 export interface Snapshot {
-  suggestions: string[]; story?: StoryView;
+  suggestions: string[]; story?: StoryView; narration:string; stageProps:StageProps;
   presentation: 'none' | 'simulated' | 'audio-clock'; status: CharacterStatus; turnId: number; subtitle: string; emotion: Emotion; action: Action;
   scene: Scene; photo: boolean; error: string; notice: string; lastInput: string; completed: number;
 }
-const INITIAL: Snapshot = { suggestions:[...INITIAL_SUGGESTIONS], presentation: 'none', status: 'idle', turnId: 0, subtitle: STORY_OPENING, emotion: 'guarded', action: 'idle', scene: 'rain', photo: false, error: '', notice: '', lastInput: '', completed: 0 };
+const INITIAL: Snapshot = { narration:OPENING_NARRATION,stageProps:{...INITIAL_PROPS}, suggestions:[...INITIAL_SUGGESTIONS], presentation: 'none', status: 'idle', turnId: 0, subtitle: STORY_OPENING, emotion: 'guarded', action: 'idle', scene: 'rain', photo: false, error: '', notice: '', lastInput: '', completed: 0 };
 export class ConversationEngine {
   private snapshot: Snapshot = { ...INITIAL };
   private listeners = new Set<() => void>();
   private controller?: AbortController;
   private history: History = [];
-  constructor(private transport: Transport, private audio: AudioPlayer, public sessionId: string = crypto.randomUUID(), private fallbackMs = (text: string) => Math.max(1800, text.length * 110)) {}
+  private committedProps:StageProps={...INITIAL_PROPS};
+  constructor(private transport: Transport, private audio: AudioPlayer, public sessionId: string = crypto.randomUUID(), private fallbackMs = (text: string) => Math.max(1800, text.length * 110), private narrationMs = (text:string) => Math.max(1400,Math.min(5000,text.length*85))) {}
   getSnapshot = () => this.snapshot;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   private update(patch: Partial<Snapshot>) { this.snapshot = { ...this.snapshot, ...patch }; for (const listener of this.listeners) listener(); }
   interrupt(listening = false) {
     const previous = this.snapshot.turnId;
     // Invalidate synchronously before abort callbacks or any network work can run.
-    this.update({ suggestions:[], presentation: 'none', turnId: previous + 1, status: listening ? 'listening' : 'idle', subtitle: '', action: 'idle', error: '', notice: '' });
+    this.update({ narration:'',stageProps:{...this.committedProps},...(this.snapshot.stageProps.phone==='sent'&&this.committedProps.phone!=='sent'?{scene:'rain' as const}:{}),suggestions:[], presentation: 'none', turnId: previous + 1, status: listening ? 'listening' : 'idle', subtitle: '', action: 'idle', error: '', notice: '' });
     this.controller?.abort(); this.controller = undefined; this.audio.stop();
     if (previous) void this.transport.cancel(this.sessionId, previous).catch(() => {});
   }
@@ -49,47 +51,44 @@ export class ConversationEngine {
       if (!current()) return;
       if (response.turnId !== turnId) throw new Error('收到不匹配的回复，请重试。');
       this.update({ notice: replyNotice });
-      for (const segment of response.segments) {
-        let heardSegment: Reply['segments'][number] | undefined;
-        const parts = sentences(segment.text);
-        for (let index = 0; index < parts.length; index++) {
-          if (!current()) return;
-          const sentence = parts[index];
+      for (const unit of presentationUnits(response)) {
+        if (!current()) return;
+        const segment=response.segments[unit.segment];
+        if(unit.kind==='cue'){
+          this.update({status:'narrating',presentation:'none',subtitle:'',action:unit.cue.kind==='practice'?'idle':segment.action,
+            narration:unit.text,stageProps:applyCue(this.committedProps,unit.cue),...(unit.cue.kind==='reply-sent'?{scene:'warm' as const}:{})});
+          await delay(this.narrationMs(unit.text),signal);
+          if(!current())return;
+          this.committedProps=applyCue(this.committedProps,unit.cue);
+        }else{
           const present = (presentation: Snapshot['presentation'] = 'audio-clock') => {
             if (!current()) return;
-            this.update({
-              presentation, status: 'speaking', subtitle: sentence, emotion: segment.emotion, action: segment.action,
-              ...(index === 0 && segment.scene ? { scene: segment.scene } : {}),
-              ...(index === 0 && segment.event === 'reveal-photo' ? { photo: true } : {}),
-            });
+            this.update({presentation,status:'speaking',subtitle:unit.text,emotion:segment.emotion,action:segment.action,
+              ...(segment.scene?{scene:segment.scene}:{}),...(segment.event==='reveal-photo'?{photo:true}:{})});
           };
-          try { await this.audio.play(sentence, signal, () => present(), { turnId }); }
-          catch (error) {
-            if (!current() || isAbort(error)) return;
+          try { await this.audio.play(unit.text,signal,()=>present(),{turnId}); }
+          catch(error){
+            if(!current()||isAbort(error))return;
             present('simulated');
-            this.update({ notice: [replyNotice, error instanceof AudioPlaybackBlocked ? AUDIO_BLOCKED_NOTICE : '暂时无法播放语音，你可以继续看字幕。'].filter(Boolean).join(' ') });
-            await delay(this.fallbackMs(sentence), signal);
+            this.update({notice:[replyNotice,error instanceof AudioPlaybackBlocked?AUDIO_BLOCKED_NOTICE:'暂时无法播放语音，你可以继续看字幕。'].filter(Boolean).join(' ')});
+            await delay(this.fallbackMs(unit.text),signal);
           }
-          if (!current()) return;
-          // Only fully presented sentences enter the next turn's history.
-          if (!heardSegment) { heardSegment = { ...segment, text: sentence }; heardSegments.push(heardSegment); }
-          else heardSegment.text += sentence;
-          // Keep a single JSON assistant message per turn, containing only fully
-          // presented text and the validated directives that accompanied it.
-          let retained = heardSegments.slice();
-          let content = JSON.stringify({ segments: retained });
-          while (content.length > 800 && retained.length > 1) { retained = retained.slice(1); content = JSON.stringify({ segments: retained }); }
-          if (!assistantEntry) { assistantEntry = { role: 'assistant', content }; this.history.push(userEntry, assistantEntry); }
-          else assistantEntry.content = content;
-          presentedCount++;
-          if(this.transport.presented){
-            try{
-              const receipt=await this.transport.presented({sessionId:this.sessionId,turnId,through:presentedCount});
-              if(current())this.update({story:receipt.story,...(receipt.suggestions?{suggestions:[...receipt.suggestions]}:{})});
-            }catch(error){
-              if(current())this.update({presentation:'none',status:'idle',action:'idle',suggestions:[],notice:error instanceof Error?error.message:'对白暂时没有同步，请刷新重开。'});
-              return;
-            }
+          if(!current())return;
+          let heard=heardSegments[unit.segment];
+          if(!heard){heard={...segment,text:unit.text};delete heard.cue;delete heard.beat;heardSegments[unit.segment]=heard;}else heard.text+=unit.text;
+          if(unit.last&&segment.beat)heard.beat=segment.beat;
+          let retained=heardSegments.slice(),content=JSON.stringify({segments:retained});
+          while(content.length>800&&retained.length>1){retained=retained.slice(1);content=JSON.stringify({segments:retained});}
+          if(!assistantEntry){assistantEntry={role:'assistant',content};this.history.push(userEntry,assistantEntry);}else assistantEntry.content=content;
+        }
+        presentedCount++;
+        if(this.transport.presented){
+          try{
+            const receipt=await this.transport.presented({sessionId:this.sessionId,turnId,through:presentedCount});
+            if(current())this.update({story:receipt.story,...(receipt.suggestions?{suggestions:[...receipt.suggestions]}:{})});
+          }catch(error){
+            if(current())this.update({presentation:'none',status:'idle',action:'idle',suggestions:[],notice:error instanceof Error?error.message:'对白暂时没有同步，请刷新重开。'});
+            return;
           }
         }
       }
@@ -105,7 +104,7 @@ export class ConversationEngine {
     }
   }
   retry() { return this.submit(this.snapshot.lastInput, 'none'); }
-  reset() { this.interrupt(); this.sessionId=crypto.randomUUID(); this.history = []; this.update({ ...INITIAL, turnId: this.snapshot.turnId }); }
+  reset() { this.interrupt(); this.sessionId=crypto.randomUUID(); this.history = [];this.committedProps={...INITIAL_PROPS}; this.update({ ...INITIAL, turnId: this.snapshot.turnId }); }
   dispose() { this.interrupt(); this.listeners.clear(); }
 }
 

@@ -71,7 +71,7 @@ export function buildApp(provider: DialogueProvider = new MockProvider(), timeou
       const violations=storyViolation(storyContext(session.story),checked.data,input.text);
       if(violations.length)throw new ProviderError('INVALID_REPLY','剧情没有衔接上，请换一句话继续。',violations);
       session.pending=prepareStory(session.story,input,checked.data);
-      const {suggestions:_pendingSuggestions,...visible}=checked.data;
+      const {suggestions:_pendingSuggestions,...visible}=session.pending.reply;
       return { turnId: input.turnId, provider: provider.kind, ...visible };
     } catch (error) {
       if (timedOut && session.latest === input.turnId) return reply.code(504).send({ error: { code: 'TIMEOUT', message: '等待回复超时，请重试。' } });

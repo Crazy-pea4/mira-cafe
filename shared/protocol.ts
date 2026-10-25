@@ -1,9 +1,11 @@
 import { z } from 'zod';
+import { stageCueSchema } from './stage';
+import { sentences } from './story';
 import { storyBeatSchema, storyProposalSchema, suggestionSchema } from './story';
 export const emotionSchema = z.enum(['guarded', 'curious', 'relieved']);
 export const actionSchema = z.enum(['idle', 'look-window', 'offer-photo']);
 export const sceneSchema = z.enum(['rain', 'warm']);
-export const segmentSchema = z.object({
+const dialogueSegmentSchema = z.object({
   text: z.string().trim().min(1).max(180),
   emotion: emotionSchema,
   action: actionSchema,
@@ -11,9 +13,10 @@ export const segmentSchema = z.object({
   event: z.literal('reveal-photo').optional(),
   beat: storyBeatSchema.optional(),
 }).strict();
+export const segmentSchema = dialogueSegmentSchema.extend({cue:stageCueSchema.optional()});
 // Authoritative live model contract; renderer schema remains wider for legacy/mock replies.
 export const modelReplySchema = z.object({
-  segments: z.array(segmentSchema.extend({
+  segments: z.array(dialogueSegmentSchema.extend({
     text: z.string().trim().min(1).max(120).refine(text => /[\p{L}\p{N}]/u.test(text) && !/^(\{|\[|`{3})/.test(text), 'Dialogue required'),
   })).min(1).max(2),
   story: storyProposalSchema.optional(),
@@ -37,5 +40,16 @@ export type TurnRequest = z.infer<typeof turnRequestSchema>;
 export type TurnResponse = z.infer<typeof turnResponseSchema>;
 export type History = z.infer<typeof historySchema>[];
 export type Fault = TurnRequest['fault'];
-export type CharacterStatus = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
+export type CharacterStatus = 'idle' | 'listening' | 'thinking' | 'speaking' | 'narrating' | 'error';
 
+
+export type PresentationUnit = {kind:'dialogue';text:string;segment:number;last:boolean}|{kind:'cue';text:string;segment:number;last:boolean;cue:import('./stage').StageCue};
+export function presentationUnits(reply:Reply):PresentationUnit[]{
+ return reply.segments.flatMap((segment,index)=>{
+  const parts=sentences(segment.text);
+  const spoken:PresentationUnit[]=parts.map((text,i)=>({kind:'dialogue',text,segment:index,last:i===parts.length-1}));
+  if(!segment.cue)return spoken;
+  const cue:PresentationUnit={kind:'cue',text:segment.cue.text,segment:index,last:true,cue:segment.cue};
+  return segment.cue.placement==='before'?[cue,...spoken]:[...spoken,cue];
+ });
+}

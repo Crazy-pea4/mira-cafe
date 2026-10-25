@@ -17,21 +17,22 @@ function advance(state:ReturnType<typeof newStory>,text='我愿意听，你慢�
  const pending=prepareStory(state,input,reply);const ack=acknowledgeStory(state,pending,pending.units.length)!;
  expect(suggestionSchema.safeParse(ack.suggestions).success).toBe(true);return{reply,ack};
 }
-function draft(){const s=newStory();for(let i=0;i<6;i++)advance(s);expect(s.facts).toEqual(['commission','ticket','people','memory','fear','draft']);return s;}
+function reach(s:ReturnType<typeof newStory>,fact:string){for(let i=0;i<12&&!s.facts.includes(fact as any);i++)advance(s);expect(s.facts).toContain(fact);return s;}
+function draft(){return reach(newStory(),'draft');}
 describe('Before the Rain Stops: authoritative presented facts and free conversation',()=>{
  it('advances only on completed presentation, not model generation or turn count',()=>{
   const s=newStory(),input=request(),reply=mockStoryReply(input,storyContext(s)),pending=prepareStory(s,input,reply);
   expect(s.facts).toEqual([]);expect(s.history).toEqual([]);
   const first=acknowledgeStory(s,pending,1)!;expect(first.suggestions).toBeUndefined();expect(s.facts).toEqual([]);
-  acknowledgeStory(s,pending,pending.units.length);expect(s.facts).toEqual(['commission']);expect(s.history).toHaveLength(2);
-  acknowledgeStory(s,pending,pending.units.length);expect(s.history).toHaveLength(2);expect(s.facts).toEqual(['commission']);
+  acknowledgeStory(s,pending,pending.units.length);expect(s.facts).toEqual(['arrival']);expect(s.history).toHaveLength(2);
+  acknowledgeStory(s,pending,pending.units.length);expect(s.history).toHaveLength(2);expect(s.facts).toEqual(['arrival']);
  });
  it('replays real partial model disclosures without falsely teaching the server unspoken facts',()=>{
   const s=newStory(),input=request();
   const r:Reply={segments:[{text:'是给我的回信。对方请我拍照，我删了四遍，还是没发出去。',emotion:'guarded',action:'idle',beat:'commission'}],story:{intent:'engage'},suggestions:['明早七点起得来吗？','旅馆在哪？','第一份委托很紧张吧？']};
   let p=prepareStory(s,input,r);let ack=acknowledgeStory(s,p,p.units.length)!;
   expect(s.facts).toEqual([]);expect(storyContext(s).summary).not.toMatch(/明早7点|小旅馆|第一份有偿/);expect(ack.suggestions?.join('')).not.toMatch(/七点|旅馆|第一份/);
-  advance(s);expect(s.facts).toEqual(['commission']);
+  reach(s,'commission');expect(s.facts).toContain('commission');
   const m:Reply={segments:[{text:'去过，三年前。就是那张照片让我收到了这次邀请。',emotion:'curious',action:'idle',beat:'memory'}],story:{intent:'engage'}};
   p=prepareStory(s,request(2),m);ack=acknowledgeStory(s,p,p.units.length)!;expect(s.facts).not.toContain('memory');expect(storyContext(s).summary).not.toContain('两天没');
  });
@@ -47,26 +48,27 @@ describe('Before the Rain Stops: authoritative presented facts and free conversa
   expect(storyViolation(storyContext(s),{segments:[{...base,beat:'commission'},{...base,beat:'ticket'}],story:{intent:'engage'}},'继续')).not.toEqual([]);
  });
  it('allows user-led branches after the invitation but rejects prose that leaks unpresented future facts',()=>{
-  const s=newStory();advance(s);expect(storyContext(s).allowedBeats).toEqual(['ticket','people','memory']);
+  const s=reach(newStory(),'commission');expect(storyContext(s).allowedBeats).toEqual(['ticket','people','memory']);
   const reply:Reply={segments:[{text:'我还没回信。三年前拍照片时，两天没和人说话。',emotion:'curious',action:'idle',beat:'ticket'}],story:{intent:'engage'}};
   expect(storyViolation(storyContext(s),reply,'继续')).toContain('segments:custom');
  });
- it('keeps repeated coffee chatter off the plot without restricting arbitrary user text',()=>{
+ it('allows external events during smalltalk but never decides the commission for the user',()=>{
   const s=newStory();for(let i=0;i<9;i++)advance(s,'你喜欢什么咖啡？');
-  expect(s.facts).toEqual([]);expect(s.history).toHaveLength(12);expect(storyContext(s).allowedBeats).toEqual(['commission']);
+  expect(s.facts).toEqual(['arrival','photo-drift','phone-message']);expect(s.history).toHaveLength(12);expect(storyContext(s).allowedBeats).toEqual(['commission']);
  });
  it('respects refusal, lets Mira decline herself and does not make a spaceship real',()=>{
   const s=newStory();advance(s,'把咖啡馆变成太空飞船吧');expect(s.facts).toEqual([]);
-  const end=advance(s,'今晚不想参与，你自己决定吧。');expect(s.ending).toBe('c');expect(end.reply.segments[0].text).toContain('我想过了');expect(end.reply.segments[0].text).toContain('白天');
-  advance(s,'谢谢，我们聊聊咖啡。');expect(s.ending).toBe('c');expect(s.facts).toEqual([]);
+  advance(s,'今晚不想参与，你自己决定吧。');expect(s.ending).toBeNull();expect(s.facts).toEqual([]);
+  reach(s,'commission');const end=advance(s,'今晚不想参与，你自己决定吧。');expect(s.ending).toBe('c');expect(end.reply.segments[0].text).toContain('我想过了');expect(end.reply.segments[0].text).toContain('白天');
+  advance(s,'谢谢，我们聊聊咖啡。');expect(s.ending).toBe('c');expect(s.facts).toContain('commission');
  });
  it('clarifies ambiguous short answers without forcing progress',()=>{
   const s=newStory();advance(s,'随便');expect(s.facts).toEqual([]);expect(s.history[1].content).toContain('clarify');
  });
  it('offers three distinct endings and preserves the exact user alternative after short history rolls off',()=>{
   const a=draft();advance(a,'坦诚说经验还不多，先聊再拍。');expect(a.ending).toBe('a');
-  const b=newStory();const plan='先视频聊十分钟，再决定试住一天';advance(b,plan);expect(b.planQuote).toBe(plan);expect(b.facts).toEqual([]);
-  for(let i=0;i<6;i++)advance(b);expect(b.history.some(h=>h.content===plan)).toBe(false);
+  const b=newStory();const plan='先视频聊十分钟，再决定试住一天';advance(b,plan);expect(b.planQuote).toBe(plan);expect(b.facts).toEqual(['arrival']);
+  reach(b,'draft');expect(b.history.some(h=>h.content===plan)).toBe(false);
   expect(storyContext(b).summary).toContain(plan);const end=advance(b,'把刚才的办法写进去吧。');expect(b.ending).toBe('b');expect(end.reply.segments.map(x=>x.text).join('')).toContain(plan);
   const c=draft();advance(c,'不想接的话，也可以拒绝。');expect(c.ending).toBe('c');
  });
@@ -95,7 +97,7 @@ describe('Before the Rain Stops: authoritative presented facts and free conversa
   const fetcher=vi.fn(async(_url,init)=>{bodies.push(JSON.parse(init.body));return new Response(JSON.stringify({choices:[{finish_reason:'stop',message:{content:JSON.stringify(bodies.length===1?invalid:valid)}}]}));});
   const budget=new BudgetGuard(new MemoryBudgetStore(),{confirmed:true,modelSupported:true,now:()=>Date.parse('2026-10-25T12:00:00Z')});
   const p=retryDialogue(budgetDialogue(new DeepSeekProvider('fixture','deepseek-flash',fetcher),budget));
-  expect((await p.reply({...request(),storyContext:storyContext(s)},new AbortController().signal)).segments[0].beat).toBe('commission');
+  expect((await p.reply({...request(),storyContext:storyContext(s)},new AbortController().signal)).segments[0].beat).toBe('arrival');
   expect(budget.status().totalRequests).toBe(2);expect(bodies[1].messages.at(-1).content).toContain('segments.0.beat:invalid_value');
   expect(bodies[0].messages[0].content).toContain('完整格式示例');expect(bodies[0].messages[0].content).toContain('不是用户已知');
  });
