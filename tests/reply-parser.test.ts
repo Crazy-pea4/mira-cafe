@@ -104,10 +104,10 @@ describe('DeepSeek parser integration, fake HTTP only',()=>{
   expect(body.messages[0].content).toContain('合计不超过120字');expect(body.messages[0].content).toContain('guarded/curious/relieved');
   expect(sink).toHaveBeenCalledOnce();
  });
- it('returns labeled usable text without a second HTTP call',async()=>{
+ it('rejects invalid live directives for the outer retry policy, without a second provider HTTP call',async()=>{
   const fetcher=vi.fn(async()=>new Response(JSON.stringify(wrap(JSON.stringify({segments:[{text,emotion:'happy',action:'unknown'}]})))));
   const provider=new DeepSeekProvider('fixture-key','deepseek-flash',fetcher);
-  expect((await provider.reply(request,new AbortController().signal)).notice).toBe('REPLY_TEXT_ONLY');expect(fetcher).toHaveBeenCalledOnce();
+  await expect(provider.reply(request,new AbortController().signal)).rejects.toMatchObject({code:'INVALID_REPLY',validationIssues:expect.arrayContaining(['segments.0.emotion:invalid_value','segments.0.action:invalid_value'])});expect(fetcher).toHaveBeenCalledOnce();
  });
  it('classifies an invalid HTTP body without leaking it or retrying',async()=>{
   const fetcher=vi.fn(async()=>new Response('private server error fixture')),sink=vi.fn();

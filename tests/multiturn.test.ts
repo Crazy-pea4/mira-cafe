@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { retryDialogue } from '../server/retry-dialogue';
 import { buildApp } from '../server/app';
 import { DeepSeekProvider } from '../server/providers';
 import { buildDialogueMessages } from '../server/dialogue-history';
@@ -12,13 +13,13 @@ const good={segments:[{text:'雨还没停。坐一会儿吧。',emotion:'curious
 const envelope=(content:string)=>({choices:[{finish_reason:'stop',message:{content}}],usage:{prompt_tokens:335,completion_tokens:11}});
 const input:TurnRequest={sessionId:'22222222-2222-4222-8222-222222222222',turnId:1,text:'聊聊旅行',history:[],fault:'none'};
 afterEach(()=>vi.unstubAllGlobals());
-async function harness(responses:string[], audio?:AudioPlayer){
+async function harness(responses:string[], audio?:AudioPlayer, retry=false){
  const bodies:any[]=[]; const facts:ReplyDiagnostic[]=[];const local:Promise<unknown>[]=[];
  const provider=new DeepSeekProvider('fixture-not-a-secret','deepseek-flash',async(_url,init)=>{
   const body=JSON.parse(init!.body as string);bodies.push(body);
   return new Response(JSON.stringify(envelope(responses[bodies.length-1]??JSON.stringify(good))));
  },fact=>facts.push(fact));
- const app=buildApp(provider);await app.ready();
+ const app=buildApp(retry?retryDialogue(provider):provider);await app.ready();
  vi.stubGlobal('fetch',async(url:string,init:RequestInit)=>{
   expect(['/api/turn','/api/cancel']).toContain(url);
   const pending=app.inject({method:'POST',url,headers:{origin:'http://127.0.0.1:3001',host:'127.0.0.1:3001'},payload:JSON.parse(init.body as string)});local.push(pending);
@@ -28,6 +29,17 @@ async function harness(responses:string[], audio?:AudioPlayer){
  return{engine,bodies,facts,async close(){engine.dispose();await Promise.all(local);await app.close();}};
 }
 describe('multi-turn application path: engine → HTTP → Fastify → provider, fake external HTTP',()=>{
+ it('repairs a second-turn schema error within the same application turn, preserving structured history',async()=>{
+  const h=await harness([JSON.stringify(good),'{\"segments\":[]}',JSON.stringify(good)],undefined,true);
+  try{
+   await h.engine.submit('你好');await h.engine.submit('聊聊旅行');
+   expect(h.engine.getSnapshot()).toMatchObject({status:'idle',completed:2,error:''});
+   expect(h.bodies).toHaveLength(3);
+   expect(h.bodies[2].messages.slice(0,-1)).toEqual(h.bodies[1].messages);
+   expect(h.bodies[2].messages.at(-1).content).toContain('segments:too_small');
+   expect(JSON.parse(h.bodies[2].messages.find((m:any)=>m.role==='assistant').content)).toEqual(good);
+  }finally{await h.close();}
+ });
  it('preserves one structured assistant per completed turn for three consecutive real application turns',async()=>{
   const h=await harness([]);
   try{
@@ -67,13 +79,12 @@ describe('multi-turn application path: engine → HTTP → Fastify → provider,
    expect(engine.getSnapshot()).toMatchObject({status:'idle',completed:1});
   }finally{await h.close();}
  });
- it('serializes safe degraded text without propagating a notice or unknown action to the next model turn',async()=>{
+ it('rejects invalid live directives without polluting the next turn history',async()=>{
   const h=await harness([JSON.stringify({segments:[{text:'安全对白。',emotion:'invalid',action:'run-code'}]}),JSON.stringify(good)]);
   try{
    await h.engine.submit('你好');await h.engine.submit('继续');
-   const previous=JSON.parse(h.bodies[1].messages.find((m:any)=>m.role==='assistant').content);
-   expect(previous).toEqual({segments:[{text:'安全对白。',emotion:'guarded',action:'idle'}]});
-   expect(JSON.stringify(previous)).not.toMatch(/run-code|notice|REPLY_TEXT_ONLY/);
+   expect(h.bodies[1].messages.map((m:any)=>m.role)).toEqual(['system','user']);
+   expect(JSON.stringify(h.bodies[1])).not.toMatch(/run-code|notice|REPLY_TEXT_ONLY/);
   }finally{await h.close();}
  });
 });

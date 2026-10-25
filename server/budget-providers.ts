@@ -4,9 +4,9 @@ import type { SpeechProvider, AsrSession } from './speech';
 import { SpeechError } from './speech';
 import { BudgetGuard, BudgetError } from './budget';
 export function budgetDialogue(provider: DialogueProvider, budget: BudgetGuard): DialogueProvider {
-  return { kind: provider.kind, reply: async (input, signal) => {
+  return { kind: provider.kind, reply: async (input, signal, repair) => {
     let release = () => {};
-    try { release = budget.reserve('deepseek', signal); return await provider.reply(input, signal); }
+    try { release = budget.reserve('deepseek', signal); return await provider.reply(input, signal, repair); }
     catch (error) { if (error instanceof BudgetError) throw new ProviderError('BUDGET_LIMIT', error.message); throw error; }
     finally { release(); }
   } };

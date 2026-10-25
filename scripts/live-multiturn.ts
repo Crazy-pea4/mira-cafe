@@ -6,6 +6,7 @@ import { buildApp } from '../server/app';
 import { DeepSeekProvider } from '../server/providers';
 import { resolveConfig } from '../server/config';
 import { BudgetGuard, FileBudgetStore } from '../server/budget';
+import { retryDialogue } from '../server/retry-dialogue';
 import { budgetDialogue } from '../server/budget-providers';
 import { ConversationEngine } from '../src/core/engine';
 import type { Transport } from '../src/core/transport';
@@ -13,13 +14,13 @@ import type { AudioPlayer } from '../src/core/audio';
 import { abortError } from '../shared/async';
 
 async function main() {
- const phase = process.argv[2] === '--authorized-before' ? 'before' : process.argv[2] === '--authorized-after' ? 'after' : process.argv[2] === '--authorized-final-two' ? 'final-two' : undefined;
+ const phase = process.argv[2] === '--authorized-before' ? 'before' : process.argv[2] === '--authorized-after' ? 'after' : process.argv[2] === '--authorized-final-two' ? 'final-two' : process.argv[2] === '--authorized-strict-three' ? 'strict-three' : undefined;
  if (!phase) { console.log('No request sent: explicit authorized phase required.'); return; }
  const marker=resolve('.local/multiturn-2026-10-25-'+phase+'.json');
  if(existsSync(marker)){console.log('REPLAY_BLOCKED: phase already recorded; no request sent.');return;}
  const config=resolveConfig(process.env);
  if(!config.deepseek||config.deepseek.model!=='deepseek-flash')throw Error('CONFIGURATION');
- const limit=phase==='before'?3:phase==='final-two'?2:8;
+ const limit=phase==='strict-three'?9:phase==='before'?3:phase==='final-two'?2:8;
  const budget=new BudgetGuard(new FileBudgetStore(resolve('.local/budget.json')),{confirmed:process.env.MIRA_BILLING_CONFIRMED==='true',modelSupported:true,maxRequests:Number(process.env.MIRA_MAX_LIVE_REQUESTS??60)});
  const before=budget.status();
  if(!before.enabled||before.totalRequests+limit>before.maxRequests||before.reservedCny+limit*.20>8)throw Error('BUDGET_BLOCKED');
@@ -43,7 +44,7 @@ async function main() {
   }catch{active.status='failed_no_retry';throw Error('LIVE_REQUEST_FAILED');}
   finally{active.elapsedMs=Date.now()-started;save();console.log(JSON.stringify(active));}
  };
- const provider=budgetDialogue(new DeepSeekProvider(config.deepseek.apiKey,config.deepseek.model,fetcher,facts=>{if(active){active.diagnostic=facts;save();}}),budget);
+ const provider=retryDialogue(budgetDialogue(new DeepSeekProvider(config.deepseek.apiKey,config.deepseek.model,fetcher,facts=>{if(active){active.diagnostic=facts;save();}}),budget));
  const app=buildApp(provider);await app.ready();
  const pending=new Set<Promise<unknown>>();
  const transport:Transport={
@@ -56,7 +57,7 @@ async function main() {
  };
  let interruptOnStart=false;let currentEngine:ConversationEngine;
  const audio:AudioPlayer={async play(_text,signal,start){if(signal.aborted)throw abortError();start();if(interruptOnStart){interruptOnStart=false;currentEngine.interrupt();throw abortError();}},stop(){}};
- const groups=phase==='final-two'?[['你好，雨这么大，你怎么还没走？','聊聊你的旅行吧。']]:phase==='before'?[['你好，雨这么大，你怎么还没走？','聊聊你的旅行吧。','能看看你的照片吗？']]:[
+ const groups=phase==='strict-three'?[['你好，雨这么大，你怎么还没走？','聊聊你的旅行吧。','能看看你的照片吗？']]:phase==='final-two'?[['你好，雨这么大，你怎么还没走？','聊聊你的旅行吧。']]:phase==='before'?[['你好，雨这么大，你怎么还没走？','聊聊你的旅行吧。','能看看你的照片吗？']]:[
   ['你好，我刚从雨里进来，想坐一会儿。','聊聊你的旅行吧。','最近哪一段旅途最让你难忘？','谢谢你，我们再聊聊那杯咖啡吧。'],
   ['能看看你的照片吗？','这张照片对你意味着什么？','先停一下，我想换个话题。','我们继续，窗外的雨让你想到什么？']
  ];
@@ -71,6 +72,6 @@ async function main() {
    }
    currentEngine.dispose();await Promise.all(pending);
   }
- }finally{await app.close();record.budgetAfter=budget.status();record.finishedAt=new Date().toISOString();record.estimatedCny=record.requests.reduce((sum:number,r:any)=>sum+(r.estimatedCny??0),0);save();console.log(JSON.stringify({phase,requests:record.requests.length,estimatedCny:record.estimatedCny,budget:record.budgetAfter,automaticPaidValidationStopped:true}));}
+ }finally{await app.close();record.budgetAfter=budget.status();record.finishedAt=new Date().toISOString();record.automaticRetries=record.requests.filter((r:any)=>(r.diagnostic?.attempt??1)>1).length;record.firstAttemptAccepted=record.requests.filter((r:any)=>(r.diagnostic?.attempt??1)===1&&['accepted','normalized'].includes(r.diagnostic?.outcome)).length;record.estimatedCny=record.requests.reduce((sum:number,r:any)=>sum+(r.estimatedCny??0),0);save();console.log(JSON.stringify({phase,requests:record.requests.length,firstAttemptAccepted:record.firstAttemptAccepted,automaticRetries:record.automaticRetries,estimatedCny:record.estimatedCny,budget:record.budgetAfter,automaticPaidValidationStopped:true}));}
 }
 main().catch(()=>{console.log('STOPPED: check the sanitized phase record for attempted request counts; no automatic retry.');process.exitCode=1;});

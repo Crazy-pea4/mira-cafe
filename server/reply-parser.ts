@@ -1,8 +1,9 @@
-import { replySchema, emotionSchema, actionSchema, sceneSchema, type Reply } from '../shared/protocol';
+import { modelReplySchema, replySchema, emotionSchema, actionSchema, sceneSchema, type Reply } from '../shared/protocol';
+import { zodValidationIssues } from './validation-feedback';
 import type { DiagnosticSink, ReplyDiagnostic, ReplyIssue } from './reply-diagnostics';
 export type ReplyFailure = 'INVALID_REPLY' | 'EMPTY_REPLY' | 'TRUNCATED_REPLY' | 'INCOMPLETE_REPLY' | 'FILTERED_REPLY' | 'REPLY_TOO_LONG';
 export class ReplyFormatError extends Error {
-  constructor(readonly code: ReplyFailure, message: string) { super(message); }
+  constructor(readonly code: ReplyFailure, message: string, readonly validationIssues: string[] = []) { super(message); }
 }
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const kind = (value: unknown): ReplyDiagnostic['contentType'] => value === undefined ? 'missing' : value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value === 'string' ? 'string' : typeof value === 'object' ? 'object' : 'other';
@@ -15,7 +16,7 @@ function splitText(text: string): string[] {
   for (const char of text) { if (chunk.length + char.length > 180) { chunks.push(chunk); chunk = ''; } chunk += char; }
   if (chunk) chunks.push(chunk); return chunks;
 }
-export function parseDeepSeekReply(envelope: unknown, sink: DiagnosticSink = () => {}): Reply {
+export function parseDeepSeekReply(envelope: unknown, sink: DiagnosticSink = () => {}, strict = false): Reply {
   const choices = object(envelope) && Array.isArray(envelope.choices) ? envelope.choices : [];
   const choice = choices[0], message = object(choice) && object(choice.message) ? choice.message : undefined;
   const content = message?.content;
@@ -34,7 +35,7 @@ export function parseDeepSeekReply(envelope: unknown, sink: DiagnosticSink = () 
   }
   const issue = (value: ReplyIssue) => { if (!facts.issues.includes(value)) facts.issues.push(value); };
   const report = () => { try { sink(facts); } catch { /* Logging cannot alter reply behavior. */ } };
-  const reject = (code: ReplyFailure, category: ReplyIssue, text: string): never => { issue(category); report(); throw new ReplyFormatError(code,text); };
+  const reject = (code: ReplyFailure, category: ReplyIssue, text: string, validationIssues: string[] = []): never => { issue(category); if(validationIssues.length) facts.validationIssues=validationIssues; report(); throw new ReplyFormatError(code,text,validationIssues); };
   if (!message) return reject('INVALID_REPLY','bad-envelope','服务没有返回可识别的回复，未自动重试。');
   if (finish === 'length') return reject('TRUNCATED_REPLY','truncated','这次回复达到长度上限，内容不完整，已停止演出；未自动重试。');
   if (finish === 'content_filter' || (typeof message.refusal === 'string' && message.refusal.trim())) return reject('FILTERED_REPLY','filtered','服务没有提供可展示的对白，未自动重试。可以换个话题。');
@@ -48,8 +49,15 @@ export function parseDeepSeekReply(envelope: unknown, sink: DiagnosticSink = () 
   let root: unknown;
   try { root = JSON.parse(raw); }
   catch {
-    if (fence || looksStructured(raw) || !usableText(raw)) return reject('INVALID_REPLY','invalid-json','这次回复格式不完整，未自动重试。可以换一句话继续。');
+    if (strict || fence || looksStructured(raw) || !usableText(raw)) return reject('INVALID_REPLY','invalid-json','这次回复格式不完整，未自动重试。可以换一句话继续。');
     root = { text: raw }; issue('plain-text');
+  }
+  if (strict) {
+    const checked = modelReplySchema.safeParse(root);
+    if (!checked.success) return reject('INVALID_REPLY','schema','对白未通过格式校验。',zodValidationIssues(checked.error.issues));
+    facts.segmentCount = checked.data.segments.length;
+    facts.outcome = facts.issues.length ? 'normalized' : 'accepted'; report();
+    return checked.data;
   }
   if (typeof root === 'string') {
     const text = root.trim();

@@ -9,6 +9,12 @@ export const segmentSchema = z.object({
   scene: sceneSchema.optional(),
   event: z.literal('reveal-photo').optional(),
 }).strict();
+// Authoritative live model contract; renderer schema remains wider for legacy/mock replies.
+export const modelReplySchema = z.object({
+  segments: z.array(segmentSchema.extend({
+    text: z.string().trim().min(1).max(120).refine(text => /[\p{L}\p{N}]/u.test(text) && !/^(\{|\[|`{3})/.test(text), 'Dialogue required'),
+  })).min(1).max(2),
+}).strict().refine(reply => reply.segments.reduce((sum,segment)=>sum+segment.text.length,0)<=120, 'Total dialogue limit');
 export const REPLY_TEXT_ONLY_NOTICE = '这次仅保留对白，场景动作暂未同步。';
 export const replySchema = z.object({ segments: z.array(segmentSchema).min(1).max(3), notice: z.literal('REPLY_TEXT_ONLY').optional() }).strict();
 export const historySchema = z.object({ role: z.enum(['user', 'assistant']), content: z.string().min(1).max(800) }).strict();
