@@ -4,7 +4,8 @@ interface EventSource {
   removeEventListener(type: string, listener: EventListener, capture?: boolean): void;
 }
 interface AudioLifecycle { unlockFromGesture(): Promise<void>; dispose(): void; }
-// No lifecycle effect starts speech, network calls or recording. Only trusted gestures unlock.
+// Lifecycle cleanup may send a cancellation control request, but never starts
+// a model reply, speech or recording. Only trusted gestures unlock audio.
 export function bindAudioLifecycle(target: EventSource, visibility: EventSource & { readonly hidden: boolean }, audio: AudioLifecycle, cancel: () => void, notice: (text: string) => void) {
   let active = true, generation = 0;
   const gesture: EventListener = event => {

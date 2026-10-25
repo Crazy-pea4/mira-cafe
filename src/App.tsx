@@ -35,7 +35,7 @@ export function App() {
       entry.configure(d.speechAvailable === true, d.speech === 'qwen', d.budget?.reason);
       audio.live = !!d.speechAvailable;
     }).catch(() => { if (!controller.signal.aborted) entry.unavailable(); });
-    const unbindAudio = bindAudioLifecycle(window, document, audio, () => { entry.cancel(); engine.interrupt(); }, setAudioNotice);
+    const unbindAudio = bindAudioLifecycle(window, document, audio, () => { entry.suspend(); engine.suspend(); }, setAudioNotice);
     const blur = () => entry.blur();
     window.addEventListener('blur', blur);
     return () => { controller.abort(); unbindAudio(); engine.dispose(); window.removeEventListener('blur', blur); };
@@ -74,7 +74,7 @@ export function App() {
         <div className="character-meta"><div><span className="name">Mira</span><span className="descriptor">旅行摄影师 · 26</span></div><span className={`state-badge ${state.status}`} data-testid="state"><i/>{STATUS[state.status]}</span></div>
         <div className="subtitle-box">
           {state.status === 'error' ? <div className="error-content" role="alert"><span>{state.error}</span><button onClick={() => void engine.retry()}>{provider === 'deepseek' ? '重新请求（会计费）' : '重试这一句 ↻'}</button></div>
-            : <p aria-live="polite" data-testid="subtitle">{state.status === 'listening' ? (input.mode === 'live' ? '我在听。' : '松开后，就从这个话题聊起吧。') : state.subtitle || (state.status==='narrating'?'…':state.status === 'thinking' ? <span className="thinking-dots"><i/><i/><i/></span> : '你可以继续说，我在这里。')}</p>}
+            : <p aria-live="polite" data-testid="subtitle">{state.status === 'listening' ? (input.mode === 'live' ? '我在听。' : '松开后，就从这个话题聊起吧。') : state.subtitle || (state.status==='narrating'?'…':state.status === 'thinking' ? <span className="thinking-dots"><i/><i/><i/></span> : '')}</p>}
           {active && <button className="interrupt" onClick={() => engine.interrupt()} aria-label="立即打断当前回复">■ 打断</button>}
         </div>
         {state.notice && !(input.showMessage && state.notice === input.message) && <div className="notice" role="status">{state.notice}</div>}

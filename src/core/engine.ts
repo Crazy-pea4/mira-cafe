@@ -21,10 +21,16 @@ export class ConversationEngine {
   getSnapshot = () => this.snapshot;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   private update(patch: Partial<Snapshot>) { this.snapshot = { ...this.snapshot, ...patch }; for (const listener of this.listeners) listener(); }
-  interrupt(listening = false) {
+  interrupt(listening = false) { this.stopTurn(listening, false); }
+  // Backgrounding is resource cleanup, not a new conversation event. Idle,
+  // completed and error snapshots must retain their exact presentation/state.
+  suspend() {
+    if (['thinking', 'speaking', 'narrating', 'listening'].includes(this.snapshot.status)) this.stopTurn(false, true);
+  }
+  private stopTurn(listening: boolean, preserveSubtitle: boolean) {
     const previous = this.snapshot.turnId;
     // Invalidate synchronously before abort callbacks or any network work can run.
-    this.update({ narration:'',stageProps:{...this.committedProps},...(this.snapshot.stageProps.phone==='sent'&&this.committedProps.phone!=='sent'?{scene:'rain' as const}:{}),suggestions:[], presentation: 'none', turnId: previous + 1, status: listening ? 'listening' : 'idle', subtitle: '', action: 'idle', error: '', notice: '' });
+    this.update({ narration:'',stageProps:{...this.committedProps},...(this.snapshot.stageProps.phone==='sent'&&this.committedProps.phone!=='sent'?{scene:'rain' as const}:{}),suggestions:[], presentation: 'none', turnId: previous + 1, status: listening ? 'listening' : 'idle', subtitle: preserveSubtitle ? this.snapshot.subtitle : '', action: 'idle', error: '', notice: '' });
     this.controller?.abort(); this.controller = undefined; this.audio.stop();
     if (previous) void this.transport.cancel(this.sessionId, previous).catch(() => {});
   }

@@ -59,6 +59,11 @@ export class VoiceEntry {
     else void this.voice.finish();
   }
   cancelHeld() { if (this.snapshot.held) this.cancel('本次录音已取消，请重新按住说话。'); }
+  suspend() {
+    // Do not mutate an untouched/idle input when the page is backgrounded.
+    // Pending permission and active capture/recognition still lose ownership.
+    if (this.snapshot.permission === 'pending' || this.snapshot.held || this.snapshot.phase !== 'idle') this.cancel();
+  }
   blur() {
     // A permission popup may blur the page. Preparation never starts an ASR session.
     if (this.snapshot.permission === 'pending') return;
