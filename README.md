@@ -204,3 +204,5 @@ npm run check
 目标为 `https://iamm.xyz/mira`，共享邀请密码在服务端校验，页面/素材/API/WS均受保护。8小时会话，右上角“离开咖啡馆”撤销会话；正常对话仍没有本地金额或累计次数拦截。`npm run build:deploy` 生成独立子路径前端与Node服务端，`npm run check:deploy`仅用临时密码和Mock验证编译产物，不加载密钥。
 
 本地根路径与Mock模式保留；当前仅完成部署准备，**尚未修改服务器或上线**。正式上线需要确认专用服务、仅iamm.xyz的nginx路径配置、邀请密码哈希和API key安全传输；不改www、不安装Docker。详细步骤、模板、测试与未验项见[部署说明](docs/DEPLOYMENT.md)。不要在聊天发送密码或key。
+
+当前服务器已安装但邀请密码待设置，https://iamm.xyz/mira 暂为503锁定页。根站/www/80保持，密钥已按授权加密传入受限配置，无新付费请求。用户回Mac后的隐藏输入步骤见[部署状态](docs/DEPLOYMENT_STATUS.md)。现有三表情辨识度不足，已记录[诊断](docs/EXPRESSION_REVIEW.md)，未混入新视觉改动。

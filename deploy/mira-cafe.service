@@ -1,6 +1,7 @@
 # Review before installation; this repository does not install/start the service.
 [Unit]
 Description=Mira Cafe
+ConditionPathExists=/etc/mira-cafe.ready
 After=network-online.target
 Wants=network-online.target
 
