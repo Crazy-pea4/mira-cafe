@@ -35,7 +35,7 @@ describe('trusted interaction and page lifecycle, fake audio only', () => {
     vi.stubGlobal('fetch', fetch); vi.stubGlobal('AudioContext', device); vi.stubGlobal('WebSocket', socket);
     vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: device } }); vi.stubGlobal('window', { speechSynthesis: { speak } });
     const html = renderToStaticMarkup(createElement(App));
-    expect(html).toContain('雨停之前'); expect(html).toContain('发送文字'); expect(html).toContain('正在连接');
+    expect(html).toContain('aria-expanded="true"');expect(html).toContain('aria-controls="dialogue-hud"');expect(html).toContain('收起对话');expect(html).toContain('雨停之前'); expect(html).toContain('发送文字'); expect(html).toContain('正在连接');
     expect(html).not.toMatch(/声音关闭|声音开启|体验工具|下一轮演示|演示朗读失败|输入模式|已确认立绘|嘴型|静音模拟|本地开发|PHASE|DeepSeek|MOCK|默认有声|真实语音转文字|本地预留/);
     for (const stub of [fetch, device, speak, socket]) expect(stub).not.toHaveBeenCalled();
   });
@@ -51,6 +51,11 @@ describe('trusted interaction and page lifecycle, fake audio only', () => {
     s.page.emit(type, { key: 'Enter', isTrusted: false }); expect(s.audio.unlockFromGesture).not.toHaveBeenCalled();
     s.page.emit(type, { key: 'Enter' }); expect(s.audio.unlockFromGesture).toHaveBeenCalledOnce(); await flush();
     expect(s.notice).toHaveBeenLastCalledWith(''); expect(s.cancel).not.toHaveBeenCalled(); s.close();
+  });
+  it('does not unlock, resume or cancel sound for HUD fold/restore gestures',async()=>{
+    const s=setup(),target={closest:(selector:string)=>selector==='[data-audio-gesture="ignore"]'?{}:null};
+    for(const type of ['pointerdown','click','keydown'])s.page.emit(type,{target,key:'Enter'});
+    await flush();expect(s.audio.unlockFromGesture).not.toHaveBeenCalled();expect(s.audio.dispose).not.toHaveBeenCalled();expect(s.cancel).not.toHaveBeenCalled();s.close();
   });
   it('shows a bounded playback hint then clears it on a later gesture, without replaying a reply', async () => {
     const s = setup(); s.audio.unlockFromGesture.mockRejectedValueOnce(new AudioPlaybackBlocked());

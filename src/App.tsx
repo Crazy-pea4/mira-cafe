@@ -1,5 +1,6 @@
 import { appPath } from './core/app-path';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { DialoguePanel } from './core/dialogue-panel';
 import { bindSceneViewport } from './core/scene-viewport';
 import { SceneAudio } from './core/scene-audio';
 import { bindAudioLifecycle } from './core/audio-lifecycle';
@@ -18,10 +19,12 @@ import { SCENE_ARTWORK } from './scene-artwork';
 import { UserMessage, type InputSource } from './UserMessage';
 const STATUS = { idle: '在等你开口', listening: '正在倾听', thinking: '正在想怎么说', speaking: '正在说话', narrating:'', error: '连接暂时中断' };
 export function App() {
-  const [{ engine, audio, entry }] = useState(() => {
+  const [{ engine, audio, entry, panel }] = useState(() => {
     const audio = new SceneAudio(), voice = new VoiceInput(new LocalSpeechTransport());
-    return { engine: new ConversationEngine(new HttpTransport(), audio), audio, entry: new VoiceEntry(voice, prepareMicrophone) };
+    const entry=new VoiceEntry(voice,prepareMicrophone);
+    return { engine: new ConversationEngine(new HttpTransport(), audio), audio, entry, panel:new DialoguePanel(()=>entry.suspend()) };
   });
+  const collapsed=useSyncExternalStore(panel.subscribe,panel.getSnapshot,panel.getSnapshot);
   const state = useSyncExternalStore(engine.subscribe, engine.getSnapshot, engine.getSnapshot);
   const input = useSyncExternalStore(entry.subscribe, entry.getSnapshot, entry.getSnapshot);
   const voiceButton = voiceButtonView(input);
@@ -71,7 +74,7 @@ export function App() {
     end: () => engine.endListening(),
   }); };
   const active = state.status === 'speaking' || state.status === 'thinking' || state.status==='narrating';
-  return <main ref={sceneRef} className={`app scene-${state.scene}`}>
+  return <main ref={sceneRef} className={`app scene-${state.scene}${collapsed?' hud-collapsed':''}`}>
     <div className="ambient-grain"/>
     <header className="topbar">
       <a className="brand" href={appPath()} aria-label="Mira Café 首页"><span className="brand-icon">☾</span><span>MIRA <b>CAFÉ</b></span></a>
@@ -91,7 +94,8 @@ export function App() {
 
       <div className="scene-props"><Narrative text="" props={state.stageProps} focus={state.propFocus}/></div>
     </section>
-    <section ref={hudRef} className="interaction" aria-label="与 Mira 对话">
+    <button type="button" className="hud-toggle" aria-expanded={!collapsed} aria-controls="dialogue-hud" data-audio-gesture="ignore" onClick={panel.toggle}><span aria-hidden="true">{collapsed?'⌃':'⌄'}</span>{collapsed?'展开对话':'收起对话'}</button>
+    <section ref={hudRef} id="dialogue-hud" hidden={collapsed} className="interaction" aria-label="与 Mira 对话">
       <div ref={streamRef} className="dialogue-stream">
         {state.narration && <p className="narration" aria-live="polite">{state.narration}</p>}
         <UserMessage text={state.lastInput} source={inputSource}/>

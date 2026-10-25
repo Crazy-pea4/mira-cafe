@@ -10,6 +10,8 @@ export function bindAudioLifecycle(target: EventSource, visibility: EventSource 
   let active = true, generation = 0;
   const gesture: EventListener = event => {
     if (!active || !event.isTrusted || visibility.hidden) return;
+    const element=event.target as {closest?:(selector:string)=>unknown}|null;
+    if(element?.closest?.('[data-audio-gesture="ignore"]'))return;
     if (event.type === 'keydown' && ['Shift','Control','Alt','Meta','Escape'].includes((event as KeyboardEvent).key)) return;
     const current = generation;
     void audio.unlockFromGesture().then(() => {
