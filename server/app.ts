@@ -1,7 +1,7 @@
 import { newStory, storyContext, storyViolation, prepareStory, acknowledgeStory, type StoryState, type PendingStory } from './story';
 import { presentationSchema } from '../shared/story';
 import Fastify from 'fastify';
-import type { BudgetGuard } from './budget';
+import type { RequestAudit } from './request-audit';
 import { registerSpeech, sameLocalOrigin } from './speech-routes';
 import type { SpeechProvider } from './speech';
 import { cancelSchema, replySchema, turnRequestSchema } from '../shared/protocol';
@@ -9,7 +9,7 @@ import { isAbort } from '../shared/async';
 import { withAbort } from '../shared/abortable';
 import { type DialogueProvider, MockProvider, ProviderError } from './providers';
 type Session = { latest: number; touched: number; active?: AbortController; story: StoryState; pending?: PendingStory };
-export function buildApp(provider: DialogueProvider = new MockProvider(), timeoutMs = 18000, speechProvider?: SpeechProvider, budget?: BudgetGuard) {
+export function buildApp(provider: DialogueProvider = new MockProvider(), timeoutMs = 18000, speechProvider?: SpeechProvider, audit?: RequestAudit) {
   const app = Fastify({ logger: false, bodyLimit: 24000 });
   registerSpeech(app, speechProvider);
   const sessions = new Map<string, Session>();
@@ -30,7 +30,7 @@ export function buildApp(provider: DialogueProvider = new MockProvider(), timeou
     }
   }, 60_000).unref();
   app.addHook('onClose', async () => { clearInterval(cleanup); for (const session of sessions.values()) session.active?.abort(); });
-  app.get('/api/health', async () => ({ ok: true, provider: provider.kind, phase: 2, speech: speechProvider ? 'qwen' : 'mock', speechAvailable: !!speechProvider && (!budget || budget.status().enabled), ...(budget ? { budget: budget.status() } : {}) }));
+  app.get('/api/health', async () => ({ ok: true, provider: provider.kind, phase: 2, speech: speechProvider ? 'qwen' : 'mock', speechAvailable: !!speechProvider, usagePolicy: { localLimits: false }, ...(audit ? { usage: audit.status() } : {}) }));
   app.post('/api/cancel', async (request, reply) => {
     const parsed = cancelSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: { code: 'BAD_REQUEST', message: '取消请求格式不正确。' } });
@@ -77,7 +77,7 @@ export function buildApp(provider: DialogueProvider = new MockProvider(), timeou
       if (timedOut && session.latest === input.turnId) return reply.code(504).send({ error: { code: 'TIMEOUT', message: '等待回复超时，请重试。' } });
       if (isAbort(error) || controller.signal.aborted || session.latest !== input.turnId) return stale();
       const known = error instanceof ProviderError ? error : new ProviderError('UNAVAILABLE', '暂时无法连接角色，请重试。');
-      return reply.code(known.code === 'TIMEOUT' ? 504 : known.code === 'BUDGET_LIMIT' ? 429 : 503).send({ error: { code: known.code, message: known.message } });
+      return reply.code(known.code === 'TIMEOUT' ? 504 : 503).send({ error: { code: known.code, message: known.message } });
     } finally {
       clearTimeout(timeout); request.raw.off('aborted', disconnect); reply.raw.off('close', disconnect);
       if (session.active === controller) session.active = undefined;

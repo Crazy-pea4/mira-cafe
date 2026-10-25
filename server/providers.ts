@@ -10,7 +10,7 @@ import { sanitizeValidationIssues } from './validation-feedback';
 import { buildDialogueMessages } from './dialogue-history';
 import type { DiagnosticSink } from './reply-diagnostics';
 export class ProviderError extends Error {
-  constructor(public code: 'TIMEOUT' | 'UNAVAILABLE' | ReplyFailure | 'NOT_CONFIGURED' | 'BUDGET_LIMIT', message: string, public validationIssues: string[] = []) { super(message); }
+  constructor(public code: 'TIMEOUT' | 'UNAVAILABLE' | ReplyFailure | 'NOT_CONFIGURED', message: string, public validationIssues: string[] = []) { super(message); }
 }
 export type DialogueRequest = TurnRequest & { storyContext?: StoryContext };
 export type RepairContext = { attempt: number; issues: readonly string[] };

@@ -5,22 +5,17 @@ import { buildApp } from './app';
 import { DeepSeekProvider, MockProvider } from './providers';
 import { resolveConfig } from './config';
 import { QwenSpeechProvider } from './qwen';
-import { BudgetGuard, FileBudgetStore } from './budget';
-import { budgetDialogue, budgetSpeech } from './budget-providers';
+import { RequestAudit, FileAuditStore } from './request-audit';
+import { auditDialogue, auditSpeech } from './audit-providers';
 import { logFacts } from './safe-log';
 import { retryDialogue } from './retry-dialogue';
 import { writeReplyDiagnostic } from './reply-diagnostics';
 // .env is loaded only by the separate, explicitly selected start:configured command.
 const config = resolveConfig(process.env);
-const budget = new BudgetGuard(new FileBudgetStore(resolve('.local/budget.json')), {
-  confirmed: process.env.MIRA_BILLING_CONFIRMED === 'true',
-  modelSupported: (!config.deepseek || config.deepseek.model === 'deepseek-flash') &&
-    (!config.qwen || (config.qwen.region === 'cn-beijing' && config.qwen.asrModel === 'qwen3-asr-flash-realtime' && config.qwen.ttsModel === 'qwen3-tts-flash-realtime')),
-  maxRequests: Number(process.env.MIRA_MAX_LIVE_REQUESTS ?? 60),
-});
-const provider = config.deepseek ? retryDialogue(budgetDialogue(new DeepSeekProvider(config.deepseek.apiKey, config.deepseek.model, fetch, writeReplyDiagnostic), budget)) : new MockProvider();
-const speech = config.qwen ? budgetSpeech(new QwenSpeechProvider(config.qwen), budget) : undefined;
-const app = buildApp(provider, 18000, speech, budget);
+const audit = new RequestAudit(new FileAuditStore(resolve('.local/budget.json')));
+const provider = config.deepseek ? retryDialogue(auditDialogue(new DeepSeekProvider(config.deepseek.apiKey, config.deepseek.model, fetch, writeReplyDiagnostic), audit)) : new MockProvider();
+const speech = config.qwen ? auditSpeech(new QwenSpeechProvider(config.qwen), audit) : undefined;
+const app = buildApp(provider, 18000, speech, audit);
 const dist = resolve('dist');
 if (existsSync(dist)) await app.register(staticPlugin, { root: dist });
 const port = Number(process.env.PORT ?? 3001);

@@ -32,7 +32,7 @@ export function App() {
     const controller = new AbortController();
     void fetch('/api/health', { signal: controller.signal }).then(r => { if (!r.ok) throw new Error('Unavailable'); return r.json(); }).then(d => {
       setProvider(d.provider);
-      entry.configure(d.speechAvailable === true, d.speech === 'qwen', d.budget?.reason);
+      entry.configure(d.speechAvailable === true, d.speech === 'qwen');
       audio.live = !!d.speechAvailable;
     }).catch(() => { if (!controller.signal.aborted) entry.unavailable(); });
     const unbindAudio = bindAudioLifecycle(window, document, audio, () => { entry.suspend(); engine.suspend(); }, setAudioNotice);

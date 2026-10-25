@@ -1,28 +1,27 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DeepSeekProvider, ProviderError, type DialogueProvider } from '../server/providers';
 import { retryDialogue } from '../server/retry-dialogue';
-import { BudgetGuard, MemoryBudgetStore } from '../server/budget';
-import { budgetDialogue } from '../server/budget-providers';
+import { RequestAudit, MemoryAuditStore } from '../server/request-audit';
+import { auditDialogue } from '../server/audit-providers';
 import { modelReplySchema } from '../shared/protocol';
 import { sanitizeValidationIssues } from '../server/validation-feedback';
 import type { ReplyDiagnostic } from '../server/reply-diagnostics';
 const input={sessionId:'22222222-2222-4222-8222-222222222222',turnId:2,text:'聊聊旅行',history:[],fault:'none' as const};
 const good={segments:[{text:'雨中的小城很安静。',emotion:'curious',action:'idle'}]};
 const wrap=(content:string,finish_reason='stop')=>({choices:[{finish_reason,message:{content}}]});
-const options={confirmed:true,modelSupported:true,now:()=>Date.parse('2026-10-25T12:00:00Z')};
-function setup(values:unknown[],maxRequests=60){
+function setup(values:unknown[]){
  const bodies:any[]=[];const facts:ReplyDiagnostic[]=[];
  const fetcher=vi.fn(async(_url:unknown,init?:RequestInit)=>{bodies.push(JSON.parse(init!.body as string));return new Response(JSON.stringify(values[bodies.length-1]??wrap(JSON.stringify(good))));});
- const budget=new BudgetGuard(new MemoryBudgetStore(),{...options,maxRequests});
- const provider=retryDialogue(budgetDialogue(new DeepSeekProvider('fixture-key','deepseek-flash',fetcher,fact=>facts.push(fact)),budget));
+ const budget=new RequestAudit(new MemoryAuditStore());
+ const provider=retryDialogue(auditDialogue(new DeepSeekProvider('fixture-key','deepseek-flash',fetcher,fact=>facts.push(fact)),budget));
  return{provider,fetcher,bodies,budget,facts};
 }
 afterEach(()=>vi.useRealTimers());
 describe('strict Zod contract and bounded charged repair attempts',()=>{
- it('repairs an invalid directive once with sanitized field feedback and a separate reservation',async()=>{
+ it('repairs an invalid directive once with sanitized field feedback and a separate audit count',async()=>{
   const h=setup([wrap(JSON.stringify({segments:[{...good.segments[0],action:'run-secret-command'}]})),wrap(JSON.stringify(good))]);
   expect(await h.provider.reply(input,new AbortController().signal)).toEqual(good);
-  expect(h.fetcher).toHaveBeenCalledTimes(2);expect(h.budget.status()).toMatchObject({totalRequests:2,reservedCny:.4});
+  expect(h.fetcher).toHaveBeenCalledTimes(2);expect(h.budget.status()).toMatchObject({totalRequests:2,legacyWeightedCny:.4});
   expect(h.bodies[1].messages.at(-1).content).toContain('segments.0.action:invalid_value');
   expect(JSON.stringify(h.bodies[1])).not.toContain('run-secret-command');
   expect(h.bodies[1]).toMatchObject({response_format:{type:'json_object'},thinking:{type:'disabled'},max_tokens:650});
@@ -31,12 +30,13 @@ describe('strict Zod contract and bounded charged repair attempts',()=>{
  it('stops after exactly three invalid replies and reports the attempted count',async()=>{
   const h=setup([wrap(' '.repeat(11)),wrap('{"segments":[]}'),wrap('{"segments":[{"text":""}]}')]);
   await expect(h.provider.reply(input,new AbortController().signal)).rejects.toMatchObject({message:expect.stringContaining('3 次')});
-  expect(h.fetcher).toHaveBeenCalledTimes(3);expect(h.budget.status()).toMatchObject({totalRequests:3,reservedCny:.6});
+  expect(h.fetcher).toHaveBeenCalledTimes(3);expect(h.budget.status()).toMatchObject({totalRequests:3,legacyWeightedCny:.6});
  });
- it('stops before retry when the independent reservation hits the request limit',async()=>{
-  const h=setup([wrap('{"segments":[]}')],1);
-  await expect(h.provider.reply(input,new AbortController().signal)).rejects.toMatchObject({code:'BUDGET_LIMIT'});
-  expect(h.fetcher).toHaveBeenCalledTimes(1);expect(h.budget.status().totalRequests).toBe(1);
+ it('still repairs within three attempts after counters exceed the removed local limits',async()=>{
+  const h=setup([wrap('{"segments":[]}')]);
+  for(let i=0;i<61;i++)h.budget.record('deepseek',new AbortController().signal);
+  expect(await h.provider.reply(input,new AbortController().signal)).toEqual(good);
+  expect(h.fetcher).toHaveBeenCalledTimes(2);expect(h.budget.status().totalRequests).toBe(63);
  });
  it('cancels during the repair pause without another request or charge',async()=>{
   vi.useFakeTimers();const h=setup([wrap('')]);const controller=new AbortController();
@@ -50,7 +50,7 @@ describe('strict Zod contract and bounded charged repair attempts',()=>{
   const work=provider.reply(input,controller.signal);controller.abort();await expect(work).rejects.toMatchObject({name:'AbortError'});
   reject(new ProviderError('INVALID_REPLY','late'));await Promise.resolve();expect(reply).toHaveBeenCalledOnce();
  });
- it.each(['UNAVAILABLE','NOT_CONFIGURED','BUDGET_LIMIT','TIMEOUT','FILTERED_REPLY','INCOMPLETE_REPLY'] as const)('never treats %s as a schema retry',async code=>{
+ it.each(['UNAVAILABLE','NOT_CONFIGURED','TIMEOUT','FILTERED_REPLY','INCOMPLETE_REPLY'] as const)('never treats %s as a schema retry',async code=>{
   const reply=vi.fn(async()=>{throw new ProviderError(code,'fixture');});
   await expect(retryDialogue({kind:'deepseek',reply}).reply(input,new AbortController().signal)).rejects.toMatchObject({code});expect(reply).toHaveBeenCalledOnce();
  });

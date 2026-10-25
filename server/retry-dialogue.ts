@@ -3,7 +3,7 @@ import { withAbort } from '../shared/abortable';
 import { ProviderError, type DialogueProvider } from './providers';
 import { sanitizeValidationIssues } from './validation-feedback';
 const repairable = new Set(['INVALID_REPLY','EMPTY_REPLY','TRUNCATED_REPLY','REPLY_TOO_LONG']);
-// Place this OUTSIDE budgetDialogue so every attempt reserves separately.
+// Place this OUTSIDE auditDialogue so every bounded attempt is counted separately.
 export function retryDialogue(provider: DialogueProvider): DialogueProvider {
   return { kind: provider.kind, async reply(request, signal) {
     let issues: string[] = [];
