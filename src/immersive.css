@@ -165,9 +165,13 @@ html, body, #root { width:100%; height:100%; overflow:hidden; }
 
 /* Folding the HUD preserves its React state and never resizes the scene/portrait. */
 .app .interaction[hidden]{display:none}
-.hud-toggle{position:absolute;z-index:7;right:max(24px,env(safe-area-inset-right));bottom:calc(var(--hud-height) + max(16px,env(safe-area-inset-bottom)) + 8px);display:flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:7px 13px;border:1px solid #e9d3b646;border-radius:24px;background:#201f29c9;color:#eee0cc;backdrop-filter:blur(7px);font:inherit;font-size:11px;cursor:pointer}
+.hud-toggle{position:absolute;z-index:7;left:50%;transform:translateX(-50%);bottom:calc(var(--hud-height) + max(16px,env(safe-area-inset-bottom)) - 1px);display:flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:7px 13px;border:1px solid #e9d3b646;border-radius:14px 14px 0 0;background:#201f29ed;color:#eee0cc;backdrop-filter:blur(7px);font:inherit;font-size:11px;cursor:pointer}
 .hud-toggle span{font-size:18px;line-height:1}
 .hud-toggle:hover{background:#34303adb}
 .hud-toggle:focus-visible{outline:2px solid #f2c78c;outline-offset:3px}
-.hud-collapsed .hud-toggle{bottom:max(16px,env(safe-area-inset-bottom))}
-@media(max-width:600px){.hud-toggle{right:max(14px,env(safe-area-inset-right));bottom:calc(var(--hud-height) + max(10px,env(safe-area-inset-bottom)) + 6px)}.hud-collapsed .hud-toggle{bottom:max(12px,env(safe-area-inset-bottom))}}
+.hud-collapsed .hud-toggle{bottom:max(16px,env(safe-area-inset-bottom));border-radius:24px}
+@media(max-width:600px){.hud-toggle{bottom:calc(var(--hud-height) + max(10px,env(safe-area-inset-bottom)) - 1px)}.hud-collapsed .hud-toggle{bottom:max(12px,env(safe-area-inset-bottom))}}
+@container scene (max-height:560px){
+ .app .interaction{padding-top:44px}
+ .app:not(.hud-collapsed) .hud-toggle{bottom:calc(var(--hud-height) + max(6px,env(safe-area-inset-bottom)) - 43px);border-radius:0 0 12px 12px;border-top:0}
+}
