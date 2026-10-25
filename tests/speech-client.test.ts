@@ -77,6 +77,13 @@ describe('microphone and press-to-talk lifecycle without devices',()=>{
  it('stops and reports recording overflow without committing it',async()=>{
   const {voice,captures,operations,callbacks}=setup();await voice.start(1,callbacks);captures[0].frame(new Uint8Array(960002));expect(callbacks.error).toHaveBeenCalledWith(expect.stringContaining('30 秒'));expect(captures[0].session.cancel).toHaveBeenCalledOnce();expect(operations[0].commit).not.toHaveBeenCalled();
  });
+ it('bounds microphone initialization and cleans up a late device after timeout',async()=>{
+  vi.useFakeTimers();const pending=deferred<CaptureSession>(),session={finish:vi.fn(async()=>{}),cancel:vi.fn()},openAsr=vi.fn();
+  const voice=new VoiceInput({openAsr,synthesize:async()=>{}},new MicrophoneCapture(async()=>pending.promise));
+  const callbacks={text:vi.fn(),error:vi.fn(),state:vi.fn()};const work=voice.start(1,callbacks);
+  await vi.advanceTimersByTimeAsync(8000);expect(callbacks.error).toHaveBeenCalledWith(expect.stringContaining('初始化超时'));
+  pending.resolve(session);await work;expect(session.cancel).toHaveBeenCalledOnce();expect(openAsr).not.toHaveBeenCalled();
+ });
  it('releasing while setup is pending cancels the eventual device without opening ASR',async()=>{
   const pending=deferred<CaptureSession>(),session={finish:vi.fn(async()=>{}),cancel:vi.fn()},openAsr=vi.fn();
   const voice=new VoiceInput({openAsr,synthesize:async()=>{}},new MicrophoneCapture(async()=>pending.promise));const callbacks={text:vi.fn(),error:vi.fn(),state:vi.fn()};

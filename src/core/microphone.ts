@@ -3,6 +3,18 @@ import { abortError } from '../../shared/async';
 export interface CaptureSession { finish(): Promise<void>; cancel(): void; }
 export type CaptureFactory = (frame: (pcm: Uint8Array) => void, signal: AbortSignal) => Promise<CaptureSession>;
 
+// Explicit permission step: never starts a worklet, uploads audio or opens ASR.
+export async function prepareMicrophone(): Promise<void> {
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new Error('真实麦克风需要 localhost 或 HTTPS 与浏览器支持。');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    stream.getTracks().forEach(track => track.stop());
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'NotAllowedError') throw new Error('麦克风权限未开启，请允许此页面使用麦克风后再点“启用麦克风”。');
+    throw new Error('没有找到可用麦克风，请检查设备连接后重试。');
+  }
+}
+
 export const openMicrophone: CaptureFactory = async (frame, signal) => {
   if (signal.aborted) throw abortError();
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new Error('真实麦克风需要 localhost 或 HTTPS 与浏览器支持。');
@@ -24,6 +36,8 @@ export const openMicrophone: CaptureFactory = async (frame, signal) => {
     stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
     if (signal.aborted || closed) { stream.getTracks().forEach(track => track.stop()); throw abortError(); }
     await resumed;
+    if (context.state === 'suspended') throw new Error('Audio context suspended');
+    if (!context.audioWorklet?.addModule) throw new Error('AudioWorklet unavailable');
     await context.audioWorklet.addModule('/mic-worklet.js');
     if (signal.aborted || closed) throw abortError();
     const resampler = new Pcm16Resampler(context.sampleRate);

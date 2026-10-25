@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { SceneAudio } from './core/scene-audio';
 import { VoiceInput } from './core/voice-input';
+import { VoiceEntry } from './core/voice-entry';
+import { prepareMicrophone } from './core/microphone';
+import { voiceButtonView } from './VoiceButton';
 import { LocalSpeechTransport } from './core/speech-transport';
 import { ConversationEngine } from './core/engine';
 import { HttpTransport } from './core/transport';
@@ -11,55 +14,52 @@ import { UserMessage, type InputSource } from './UserMessage';
 const STATUS = { idle: '在等你开口', listening: '正在倾听', thinking: '正在想怎么说', speaking: '正在说话', error: '连接暂时中断' };
 const prompts = ['雨这么大，你怎么还没走？', '你在等谁？', '能看看你的照片吗？'];
 export function App() {
-  const [{ engine, audio, voice }] = useState(() => { const audio = new SceneAudio(); return { engine: new ConversationEngine(new HttpTransport(), audio), audio, voice: new VoiceInput(new LocalSpeechTransport()) }; });
+  const [{ engine, audio, entry }] = useState(() => {
+    const audio = new SceneAudio(), voice = new VoiceInput(new LocalSpeechTransport());
+    return { engine: new ConversationEngine(new HttpTransport(), audio), audio, entry: new VoiceEntry(voice, prepareMicrophone) };
+  });
   const state = useSyncExternalStore(engine.subscribe, engine.getSnapshot);
+  const input = useSyncExternalStore(entry.subscribe, entry.getSnapshot);
+  const voiceButton = voiceButtonView(input);
   const [text, setText] = useState('');
   const [inputSource, setInputSource] = useState<InputSource>('text');
-  const [isHolding, setIsHolding] = useState(false);
   const [backgroundReady, setBackgroundReady] = useState(false);
   const [muted, setMuted] = useState(true);
   const [tools, setTools] = useState(false);
   const [fault, setFault] = useState<Fault>('none');
   const [provider, setProvider] = useState('mock');
   const [budget, setBudget] = useState<{capCny:number;reservedCny:number;totalRequests:number;maxRequests:number;reason:string} | null>(null);
-  const [speechAvailable, setSpeechAvailable] = useState(false);
-  const [inputMode, setInputMode] = useState<'mock' | 'live'>('mock');
-  const [voiceMessage, setVoiceMessage] = useState('');
-  const holding = useRef(false);
   useEffect(() => {
     const controller = new AbortController();
-    void fetch('/api/health', { signal: controller.signal }).then(r => r.json()).then(d => { setProvider(d.provider); setBudget(d.budget ?? null); setSpeechAvailable(!!d.speechAvailable); if (audio.live !== !!d.speechAvailable) { audio.disable(); setMuted(true); } audio.live = !!d.speechAvailable; }).catch(() => {});
-    const blur = () => { holding.current = false; setIsHolding(false); voice.cancel(); engine.endListening(); };
+    void fetch('/api/health', { signal: controller.signal }).then(r => { if (!r.ok) throw new Error('Unavailable'); return r.json(); }).then(d => {
+      setProvider(d.provider); setBudget(d.budget ?? null);
+      entry.configure(d.speechAvailable === true, d.speech === 'qwen', d.budget?.reason);
+      if (audio.live !== !!d.speechAvailable) { audio.disable(); setMuted(true); }
+      audio.live = !!d.speechAvailable;
+    }).catch(() => { if (!controller.signal.aborted) entry.unavailable(); });
+    const blur = () => entry.blur();
     window.addEventListener('blur', blur);
-    return () => { controller.abort(); voice.cancel(); audio.disable(); engine.dispose(); window.removeEventListener('blur', blur); };
-  }, [engine, voice, audio]);
+    return () => { controller.abort(); entry.cancel(); audio.disable(); engine.dispose(); window.removeEventListener('blur', blur); };
+  }, [engine, entry, audio]);
   useEffect(() => {
     if (!tools) return;
     const controller = new AbortController();
     void fetch('/api/health', { signal: controller.signal }).then(r => r.json()).then(d => setBudget(d.budget ?? null)).catch(() => {});
     return () => controller.abort();
   }, [tools, state.status]);
-  const send = (value: string, source: InputSource = 'text') => { if (!value.trim() || value.trim().length > 800) return; setInputSource(source); voice.cancel(); holding.current = false; setIsHolding(false); setText(''); const nextFault = fault; setFault('none'); void engine.submit(value, nextFault); };
-  const hold = () => {
-    if (holding.current) return;
-    holding.current = true; setIsHolding(true); setVoiceMessage(''); voice.cancel(); engine.interrupt(true);
-    if (inputMode === 'live' && speechAvailable) {
-      const turnId = engine.getSnapshot().turnId;
-      void voice.start(turnId, {
-        text: value => { if (engine.getSnapshot().turnId === turnId) send(value, 'asr'); },
-        error: message => { if (engine.getSnapshot().turnId === turnId) { holding.current = false; setIsHolding(false); engine.inputNotice(message); } },
-        state: setVoiceMessage,
-      });
-    }
+  const send = (value: string, source: InputSource = 'text') => {
+    if (!value.trim() || value.trim().length > 800) return;
+    setInputSource(source); entry.cancel(); setText(''); const nextFault = fault; setFault('none'); void engine.submit(value, nextFault);
   };
-  const release = () => {
-    if (!holding.current) return; holding.current = false; setIsHolding(false);
-    if (inputMode === 'live' && speechAvailable) void voice.finish();
-    else send(prompts[state.photo ? 0 : state.completed ? 2 : 1], 'mock-voice');
-  };
-  const cancelHold = () => { if (!holding.current) return; holding.current = false; setIsHolding(false); voice.cancel(); engine.endListening(); };
+  const hold = () => entry.press({
+    begin: () => { engine.interrupt(true); return engine.getSnapshot().turnId; },
+    text: value => send(value, 'asr'),
+    mock: () => { const latest = engine.getSnapshot(); send(prompts[latest.photo ? 0 : latest.completed ? 2 : 1], 'mock-voice'); },
+    notice: message => engine.inputNotice(message),
+    end: () => engine.endListening(),
+  });
   const toggleSound = async () => {
-    voice.cancel(); engine.interrupt();
+    entry.cancel(); engine.interrupt();
     if (!muted) { audio.disable(); setMuted(true); return; }
     try { await audio.enable(); setMuted(false); }
     catch { audio.disable(); setMuted(true); engine.inputNotice('浏览器尚未允许声音，仍保持静音。'); }
@@ -90,7 +90,7 @@ export function App() {
         <div className="character-meta"><div><span className="name">Mira</span><span className="descriptor">旅行摄影师 · 26</span></div><span className={`state-badge ${state.status}`} data-testid="state"><i/>{STATUS[state.status]}</span></div>
         <div className="subtitle-box">
           {state.status === 'error' ? <div className="error-content" role="alert"><span>{state.error}</span><button onClick={() => void engine.retry()}>重试这一句 ↻</button></div>
-            : <p aria-live="polite" data-testid="subtitle">{state.status === 'listening' ? (inputMode === 'live' ? voiceMessage : '我在听。松开后将发送预设的模拟语音台词。') : state.subtitle || (state.status === 'thinking' ? <span className="thinking-dots"><i/><i/><i/></span> : '你可以继续说，我在这里。')}</p>}
+            : <p aria-live="polite" data-testid="subtitle">{state.status === 'listening' ? (input.mode === 'live' ? input.message : '我在听。松开后将发送预设的模拟语音台词。') : state.subtitle || (state.status === 'thinking' ? <span className="thinking-dots"><i/><i/><i/></span> : '你可以继续说，我在这里。')}</p>}
           {active && <button className="interrupt" onClick={() => engine.interrupt()} aria-label="立即打断当前回复">■ 打断</button>}
         </div>
         {state.notice && <div className="notice" role="status">{state.notice}</div>}
@@ -103,21 +103,23 @@ export function App() {
         <input value={text} onChange={event => setText(event.target.value)} aria-label="对 Mira 说点什么" placeholder="对 Mira 说点什么…" maxLength={800}/>
         <button className="send" type="submit" disabled={!text.trim()} aria-label="发送文字">↑</button>
         <div className="composer-divider"/>
-        <button type="button" className={`talk ${state.status === 'listening' ? 'holding' : ''}`}
-          onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); hold(); }}
-          onPointerUp={release} onPointerCancel={cancelHold} onLostPointerCapture={cancelHold}
-          onKeyDown={event => { if ((event.key === ' ' || event.key === 'Enter') && !event.repeat) { event.preventDefault(); hold(); } }}
-          onKeyUp={event => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); release(); } }}
-          onBlur={cancelHold} aria-label={inputMode === 'live' ? '按住录音并发送到 Qwen，松开停止并识别为文字' : '按住体验模拟语音，松开发送预设台词'}>
-          <span className="mic-icon">♩</span><span>{state.status === 'listening' ? (isHolding ? (inputMode === 'live' ? '松开识别' : '松开发送') : '识别中…') : inputMode === 'live' ? '按住录音' : '按住体验'}<small>{inputMode === 'live' ? '真实麦克风' : '模拟语音'}</small></span>
+        <button type="button" className={'talk ' + (input.held ? 'holding' : '')} disabled={voiceButton.disabled}
+          onClick={() => { if (entry.needsPermission()) void entry.prepare(message => engine.inputNotice(message)); }}
+          onPointerDown={event => { if (entry.canHold()) { event.currentTarget.setPointerCapture(event.pointerId); hold(); } }}
+          onPointerUp={() => entry.release()} onPointerCancel={() => entry.cancelHeld()} onLostPointerCapture={() => entry.cancelHeld()}
+          onKeyDown={event => { if ((event.key === ' ' || event.key === 'Enter') && !event.repeat && entry.canHold()) { event.preventDefault(); hold(); } }}
+          onKeyUp={event => { if ((event.key === ' ' || event.key === 'Enter') && entry.canHold()) { event.preventDefault(); entry.release(); } }}
+          onBlur={() => entry.cancelHeld()} aria-label={input.mode === 'mock' ? '模拟台词（不录音，不识别讲话）' : entry.needsPermission() ? '启用麦克风（授权后再按住说话）' : voiceButton.label + '，' + voiceButton.detail}>
+          <span className="mic-icon">♩</span><span>{voiceButton.label}<small>{voiceButton.detail}</small></span>
         </button>
       </form>
-      <div className="interaction-footer"><span>默认静音 <i>·</i> {inputMode === 'live' ? '按住录音 → 松开识别；文字显示为你的消息并发送' : '模拟语音不会录音；开启声音需主动点击'}</span><button onClick={() => setTools(!tools)} aria-expanded={tools}>体验工具 {tools ? '−' : '+'}</button></div>
+      <p className="voice-help" role="status" data-testid="voice-help">{input.message}</p>
+      <div className="interaction-footer"><span>默认静音 <i>·</i> {input.mode === 'live' ? '按住录音 → 松开识别；文字显示为你的消息并发送' : '模拟语音不会录音；开启声音需主动点击'}</span><button onClick={() => setTools(!tools)} aria-expanded={tools}>体验工具 {tools ? '−' : '+'}</button></div>
       {tools && <div className="demo-tools">
-        <label>输入模式<select aria-label="输入模式" value={inputMode} onChange={event => { voice.cancel(); holding.current = false; setIsHolding(false); engine.interrupt(); setInputMode(event.target.value as 'mock' | 'live'); }}><option value="mock">模拟语音（不录音）</option><option value="live" disabled={!speechAvailable}>{speechAvailable ? '真实麦克风 → Qwen' : '真实麦克风（未配置）'}</option></select></label>
+        <label>输入模式<select aria-label="输入模式" value={input.mode} onChange={event => { entry.select(event.target.value as 'mock' | 'live'); engine.interrupt(); }}><option value="live" disabled={!input.available}>{input.available ? '真实麦克风 → Qwen' : '真实麦克风（暂不可用）'}</option><option value="mock">模拟台词（不识别讲话）</option></select></label>
         <label>下一轮演示<select aria-label="下一轮演示" value={fault} onChange={event => setFault(event.target.value as Fault)}><option value="none">正常回复</option><option value="slow">延迟回复（可打断）</option><option value="timeout">模拟超时</option><option value="error">模拟服务失败</option></select></label>
         <button onClick={() => { audio.failNext = true; send('能看看你的照片吗？'); }}>演示朗读失败</button>
-        <button onClick={() => { holding.current = false; setIsHolding(false); voice.cancel(); engine.reset(); }}>重新相遇 ↻</button>
+        <button onClick={() => { entry.cancel(); engine.reset(); }}>重新相遇 ↻</button>
         <span>场景随对话推进 · 已完成 {state.completed} 轮</span>
         {budget && <div className="budget-status" data-testid="budget">测试合计预算 ¥{budget.capCny} · 本地预留 ¥{budget.reservedCny.toFixed(2)} · 请求 {budget.totalRequests}/{budget.maxRequests}
           <small>预留不等于实际账单。{budget.reason || '接近上限会停止新请求；失败与取消不返还预留。'}</small></div>}
