@@ -18,6 +18,6 @@ export type StoryProposal=z.infer<typeof storyProposalSchema>;
 export type StoryView=z.infer<typeof storyViewSchema>;
 export type Presentation=z.infer<typeof presentationSchema>;
 export type PresentationResponse=z.infer<typeof presentationResponseSchema>;
-export type StoryContext=StoryView & { summary:string; allowedBeats:StoryBeat[]; lastAskedQuestion:boolean };
+export type StoryContext=StoryView & { summary:string; allowedBeats:StoryBeat[]; lastAskedQuestion:boolean; presentedSuggestions:string[] };
 export const INITIAL_SUGGESTIONS=['谢谢，外面雨太大了。','你也在这里躲雨？','我就坐一会儿，不打扰你。'];
 export function sentences(text:string):string[]{return text.match(/[^。！？!?]+[。！？!?]?/g)??[text];}

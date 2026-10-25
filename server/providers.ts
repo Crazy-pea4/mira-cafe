@@ -61,7 +61,7 @@ export class DeepSeekProvider implements DialogueProvider {
   constructor(private apiKey: string, private model = 'deepseek-flash', private fetcher: typeof fetch = fetch, private diagnostics: DiagnosticSink = () => {}) {}
   async reply(request: DialogueRequest, signal: AbortSignal, repair?: RepairContext): Promise<Reply> {
     if (!this.apiKey) throw new ProviderError('NOT_CONFIGURED', 'DeepSeek 尚未配置。请返回 Mock 模式，或在本机安全配置。');
-    const system=request.storyContext ? SYSTEM.replace('顶层必须且只能有segments数组','顶层包含segments数组、story对象和suggestions数组').replace('不添加其他字段','仅按剧情协议额外添加beat字段')+'\n'+storyPrompt(request.storyContext) : SYSTEM;
+    const system=request.storyContext ? SYSTEM.replace('顶层必须且只能有segments数组','顶层包含segments数组、story对象和suggestions数组').replace('不添加其他字段','仅按剧情协议额外添加beat字段')+'\n'+storyPrompt(request.storyContext,request.text) : SYSTEM;
     const messages = buildDialogueMessages(system, request, !!request.storyContext);
     const feedback = sanitizeValidationIssues(repair?.issues);
     if (feedback.length) messages.push({role:'user',content:'上次输出未通过对白格式校验。字段错误：'+feedback.join('; ')+'。仅根据原用户问题重新输出完整JSON；segments必须有1–2段非空自然对白，text总计不超过120字。保持story意图与可推进beat一致，不越过服务端前置事实；不要在正文偷讲后续背景。不得复述校验信息，不要代码块或解释。'});
