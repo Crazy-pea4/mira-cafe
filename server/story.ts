@@ -59,9 +59,9 @@ export function storyViolation(context:StoryContext,reply:Reply,text:string):str
  if(reply.story?.planQuote&&!text.includes(reply.story.planQuote))return['story.planQuote:invalid_value'];
  const allowedFacts=new Set([...context.facts,...beats.map(b=>b.beat)]);
  const spoken=reply.segments.map(s=>s.text).join('');
- const hiddenMarkers:[string,RegExp][]=[['commission',/第一份.{0,6}(有偿|摄影|委托)|第一次.{0,6}(有偿|收费)/],['ticket',/车票.{0,8}(已经|已|早就).{0,4}(买|订)|车票.{0,4}(买好|订好)/],['people',/(不仅|不只).{0,15}风景.{0,20}(人|住客)/],['memory',/三年前|三年以前|两天没.{0,8}说话/],['fear',/风景不会看着我/],['draft',/很擅长这类拍摄/],['phone-message',/明早需要去车站接你吗/]];
+ const hiddenMarkers:[string,RegExp][]=[['commission',/第一份.{0,6}(有偿|摄影|委托)|第一次.{0,6}(有偿|收费)/],['ticket',/车票.{0,8}(已经|已|早就).{0,4}(买|订)|车票.{0,4}(买好|订好)/],['people',/(不仅|不只).{0,15}风景.{0,20}(人|住客)/],['memory',/两天没.{0,8}说话/],['fear',/风景不会看着我/],['draft',/很擅长这类拍摄/],['phone-message',/明早需要去车站接你吗/]];
  if(hiddenMarkers.some(([fact,pattern])=>!allowedFacts.has(fact as StoryBeat)&&pattern.test(spoken)))return['segments:custom'];
- if(!context.facts.includes('photo-drift')&&reply.segments.some(s=>s.event==='reveal-photo')&&!beats.some(b=>b.beat==='photo-drift'))return['segments:custom'];
+ if(!context.facts.includes('photo-drift')&&reply.segments.some(s=>s.event==='reveal-photo')&&!beats.some(b=>b.beat==='photo-drift')&&!(context.allowedBeats.includes('photo-drift')&&!['decline','clarify','reframe'].includes(proposal.intent)&&/照片|相片|风|窗|门/.test(text)))return['segments:custom'];
  if(!beats.length)return[];
  const {beat,index}=beats[0],path='segments.'+index+'.beat:invalid_value';
  if(context.ending)return[path];
@@ -107,7 +107,7 @@ export function contextualSuggestions(state:StoryView,text='',proposal?:StoryPro
  if(state.facts.includes('practice')&&!state.facts.includes('draft'))return['我会先看看窗外的光。','我怕被镜头盯着，不知道看哪里。','这样慢慢问，我就自在多了。'];
  if(proposal?.intent==='alternative'&&state.planQuote)return['这个办法哪部分让你安心？','还有什么需要问清楚？','也可以再想一个不同的办法。'];
  if(proposal?.intent==='decline'||state.declined)return['那就只喝咖啡吧。','我们聊聊雨吧。','如果你想好了，可以告诉我。'];
- if(proposal?.intent==='smalltalk'||inputBoundary(text)==='smalltalk')return /咖啡/.test(text)?['这杯确实适合下雨的晚上。','我更喜欢加一点奶。',state.facts.includes('phone-message')?'你刚才为什么没回消息？':'窗边坐着确实舒服。']:['听起来挺有意思，再说一点。','换个轻松的话题也很好。','你刚才提到的消息是什么？'];
+ if(proposal?.intent==='smalltalk'||inputBoundary(text)==='smalltalk')return /咖啡/.test(text)?['这杯确实适合下雨的晚上。','我更喜欢加一点奶。',state.facts.includes('phone-message')?'你刚才为什么没回消息？':'窗边坐着确实舒服。']:['听起来挺有意思，再说一点。','换个轻松的话题也很好。',state.facts.includes('phone-message')?'你刚才提到的消息是什么？':'窗边坐着确实舒服。'];
  if(state.facts.includes('draft'))return['坦诚说经验不多，先聊再拍。','先视频沟通，再决定试住一天。','如果不想接，也可以拒绝。'];
  if(state.facts.includes('fear'))return['拿我练习一下，你会怎么问？','能看看你写的草稿吗？','先视频沟通，再决定去不去。'];
  if(state.facts.includes('memory'))return['独处和拍人，对你有什么不同？','你担心别人不愿意吗？','不急，先看看这张照片。'];
@@ -132,8 +132,17 @@ function safeSuggestions(values:unknown,state:StoryState):string[]|undefined{
 }
 export type PendingStory={turnId:number;input:string;reply:Reply;proposal:StoryProposal;units:PresentationUnit[];through:number;heard:Reply['segments'];historyEntry?:History[number];suggestions?:string[]};
 export function prepareStory(state:StoryState,request:TurnRequest,reply:Reply):PendingStory{
- reply=directStory(state,reply,request.text);
  const proposal=proposalFor(reply,request.text);
+ // External events belong to the local director. A model may omit optional beat fields;
+ // advance only from acknowledged prerequisites and a relevant player response, never a timer.
+ if(!reply.segments.some(s=>s.beat)&&!state.ending&&!['decline','clarify','reframe'].includes(proposal.intent)){
+  const allowed=allowedBeats(state);let beat:StoryBeat|undefined;
+  if(allowed.includes('arrival'))beat='arrival';
+  else if(allowed.includes('photo-drift')&&/照片|相片|风|窗|门/.test(request.text))beat='photo-drift';
+  else if(allowed.includes('phone-message'))beat='phone-message';
+  if(beat)reply={...reply,segments:reply.segments.map((segment,index)=>index===0?{...segment,beat}:segment)};
+ }
+ reply=directStory(state,reply,request.text);
  return{turnId:request.turnId,input:request.text,reply,proposal,through:0,heard:[],units:presentationUnits(reply)};
 }
 export function acknowledgeStory(state:StoryState,pending:PendingStory,through:number):PresentationResponse|undefined{

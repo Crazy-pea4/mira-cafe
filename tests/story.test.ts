@@ -56,6 +56,41 @@ describe('Before the Rain Stops: authoritative presented facts and free conversa
   const s=newStory();for(let i=0;i<9;i++)advance(s,'你喜欢什么咖啡？');
   expect(s.facts).toEqual(['arrival','photo-drift','phone-message']);expect(s.history).toHaveLength(12);expect(storyContext(s).allowedBeats).toEqual(['commission']);
  });
+ it('directs missing external beats from presented prerequisites and relevant player input',()=>{
+  const s=newStory();advance(s,'谢谢，雨太大了。');
+  const reply:Reply={segments:[{text:'是山脚一家小旅馆。',emotion:'curious',action:'idle'}],story:{intent:'engage'}};
+  const p=prepareStory(s,request(2,'这张照片在哪里拍的？'),reply);
+  expect(p.reply.segments[0].cue?.kind).toBe('photo-drift');expect(s.facts).not.toContain('photo-drift');
+  acknowledgeStory(s,p,1);expect(s.facts).toContain('photo-drift');
+  acknowledgeStory(s,p,p.units.length);
+  const next=prepareStory(s,request(3,'给你，照片别沾水。'),reply);
+  expect(next.reply.segments[0].cue?.kind).toBe('phone-message');expect(s.facts).not.toContain('phone-message');
+  acknowledgeStory(s,next,1);expect(s.facts).toContain('phone-message');
+ });
+ it('accepts a photo request with a safe reveal action even when the model omits its optional external beat',async()=>{
+  const s=newStory();advance(s,'谢谢。');
+  const r:Reply={segments:[{text:'三年前在山脚的一家小旅馆拍的。',emotion:'curious',action:'offer-photo',event:'reveal-photo'}],story:{intent:'engage'}};
+  const fetcher=vi.fn(async()=>new Response(JSON.stringify({choices:[{finish_reason:'stop',message:{content:JSON.stringify(r)}}]})));
+  const provider=retryDialogue(new DeepSeekProvider('fixture','deepseek-flash',fetcher));
+  const input={...request(2,'你桌上的照片在哪里拍的？'),storyContext:storyContext(s)};
+  const reply=await provider.reply(input,new AbortController().signal);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  const p=prepareStory(s,input,reply);expect(p.reply.segments[0].cue?.kind).toBe('photo-drift');
+  expect(storyViolation(storyContext(newStory()),r,input.text)).toContain('segments:custom');
+ });
+ it('does not force external events for irrelevant smalltalk, refusal, clarification or reframe',()=>{
+  const s=newStory();advance(s,'谢谢。');
+  for(const [text,intent] of [['咖啡真好喝。','smalltalk'],['不想参与，你自己决定。','decline'],['照片是什么？','clarify'],['把窗外变成太空船','reframe']] as const){
+   const r:Reply={segments:[{text:'好，就坐一会儿。',emotion:'curious',action:'idle'}],story:{intent}};
+   expect(prepareStory(s,request(2,text),r).reply.segments[0].cue).toBeUndefined();
+  }
+ });
+ it('does not leak an unseen message through local smalltalk fallback',()=>{
+  const s=newStory();advance(s,'谢谢。');
+  expect(contextualSuggestions(s,'风挺大。',{intent:'smalltalk'}).join('')).not.toContain('消息');
+  reach(s,'phone-message');
+  expect(contextualSuggestions(s,'风挺大。',{intent:'smalltalk'}).join('')).toContain('消息');
+ });
  it('respects refusal, lets Mira decline herself and does not make a spaceship real',()=>{
   const s=newStory();advance(s,'把咖啡馆变成太空飞船吧');expect(s.facts).toEqual([]);
   advance(s,'今晚不想参与，你自己决定吧。');expect(s.ending).toBeNull();expect(s.facts).toEqual([]);
