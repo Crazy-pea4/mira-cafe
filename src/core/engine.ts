@@ -3,14 +3,14 @@ import { turnResponseSchema, REPLY_TEXT_ONLY_NOTICE, presentationUnits } from '.
 import { delay, isAbort } from '../../shared/async';
 import { AudioPlaybackBlocked, AUDIO_BLOCKED_NOTICE, type AudioPlayer } from './audio';
 import { STORY_OPENING, INITIAL_SUGGESTIONS, sentences, type StoryView } from '../../shared/story';
-import { OPENING_NARRATION, INITIAL_PROPS, applyCue, type StageProps } from '../../shared/stage';
+import { OPENING_NARRATION, INITIAL_PROPS, applyCue, type StageProps, type PropFocus } from '../../shared/stage';
 import type { Transport } from './transport';
 export interface Snapshot {
-  suggestions: string[]; story?: StoryView; narration:string; stageProps:StageProps;
+  propFocus:PropFocus; suggestions: string[]; story?: StoryView; narration:string; stageProps:StageProps;
   presentation: 'none' | 'simulated' | 'audio-clock'; status: CharacterStatus; turnId: number; subtitle: string; emotion: Emotion; action: Action;
   scene: Scene; photo: boolean; error: string; notice: string; lastInput: string; completed: number;
 }
-const INITIAL: Snapshot = { narration:OPENING_NARRATION,stageProps:{...INITIAL_PROPS}, suggestions:[...INITIAL_SUGGESTIONS], presentation: 'none', status: 'idle', turnId: 0, subtitle: STORY_OPENING, emotion: 'guarded', action: 'idle', scene: 'rain', photo: false, error: '', notice: '', lastInput: '', completed: 0 };
+const INITIAL: Snapshot = { propFocus:'none', narration:OPENING_NARRATION,stageProps:{...INITIAL_PROPS}, suggestions:[...INITIAL_SUGGESTIONS], presentation: 'none', status: 'idle', turnId: 0, subtitle: STORY_OPENING, emotion: 'guarded', action: 'idle', scene: 'rain', photo: false, error: '', notice: '', lastInput: '', completed: 0 };
 export class ConversationEngine {
   private snapshot: Snapshot = { ...INITIAL };
   private listeners = new Set<() => void>();
@@ -30,7 +30,7 @@ export class ConversationEngine {
   private stopTurn(listening: boolean, preserveSubtitle: boolean) {
     const previous = this.snapshot.turnId;
     // Invalidate synchronously before abort callbacks or any network work can run.
-    this.update({ narration:'',stageProps:{...this.committedProps},...(this.snapshot.stageProps.phone==='sent'&&this.committedProps.phone!=='sent'?{scene:'rain' as const}:{}),suggestions:[], presentation: 'none', turnId: previous + 1, status: listening ? 'listening' : 'idle', subtitle: preserveSubtitle ? this.snapshot.subtitle : '', action: 'idle', error: '', notice: '' });
+    this.update({ propFocus:'none',narration:'',stageProps:{...this.committedProps},...(this.snapshot.stageProps.phone==='sent'&&this.committedProps.phone!=='sent'?{scene:'rain' as const}:{}),suggestions:[], presentation: 'none', turnId: previous + 1, status: listening ? 'listening' : 'idle', subtitle: preserveSubtitle ? this.snapshot.subtitle : '', action: 'idle', error: '', notice: '' });
     this.controller?.abort(); this.controller = undefined; this.audio.stop();
     if (previous) void this.transport.cancel(this.sessionId, previous).catch(() => {});
   }
@@ -62,7 +62,7 @@ export class ConversationEngine {
         const segment=response.segments[unit.segment];
         if(unit.kind==='cue'){
           this.update({status:'narrating',presentation:'none',subtitle:'',action:unit.cue.kind==='practice'?'idle':segment.action,
-            narration:unit.text,stageProps:applyCue(this.committedProps,unit.cue),...(unit.cue.kind==='reply-sent'?{scene:'warm' as const}:{})});
+            propFocus:unit.cue.kind==='photo-drift'?'photo':unit.cue.kind==='practice'?'none':'phone',narration:unit.text,stageProps:applyCue(this.committedProps,unit.cue),...(unit.cue.kind==='reply-sent'?{scene:'warm' as const}:{})});
           await delay(this.narrationMs(unit.text),signal);
           if(!current())return;
           this.committedProps=applyCue(this.committedProps,unit.cue);
@@ -70,7 +70,7 @@ export class ConversationEngine {
           const present = (presentation: Snapshot['presentation'] = 'audio-clock') => {
             if (!current()) return;
             this.update({presentation,status:'speaking',subtitle:unit.text,emotion:segment.emotion,action:segment.action,
-              ...(segment.scene?{scene:segment.scene}:{}),...(segment.event==='reveal-photo'?{photo:true}:{})});
+              ...(segment.scene?{scene:segment.scene}:{}),...(segment.event==='reveal-photo'?{photo:true,propFocus:'photo' as const}:{})});
           };
           try { await this.audio.play(unit.text,signal,()=>present(),{turnId}); }
           catch(error){
@@ -101,7 +101,7 @@ export class ConversationEngine {
       if (current()) this.update({ ...(!this.transport.presented&&response.suggestions?{suggestions:[...response.suggestions]}:{}), presentation: 'none', status: 'idle', action: 'idle', completed: this.snapshot.completed + 1 });
     } catch (error) {
       if (!current() || isAbort(error)) return;
-      this.update({ status: 'error', subtitle: '', action: 'idle', error: error instanceof Error ? error.message : '连接失败，请重试。' });
+      this.update({ propFocus:'none',status: 'error', subtitle: '', action: 'idle', error: error instanceof Error ? error.message : '连接失败，请重试。' });
     } finally {
       // Pending/failed user turns were never committed; neither rapid input
       // nor an explicit retry inherits a phantom unanswered exchange.

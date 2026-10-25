@@ -81,7 +81,7 @@ describe('event-driven rain shelter, photo, message and rehearsal',()=>{
   }finally{await app.close();}
  });
  it('renders narration and the fictional phone outside Mira dialogue without technical labels',()=>{
-  const html=renderToStaticMarkup(createElement(Narrative,{text:OPENING_NARRATION,props:{...INITIAL_PROPS,phone:'incoming',message:'明早需要去车站接你吗？'}}));
+  const html=renderToStaticMarkup(createElement(Narrative,{text:OPENING_NARRATION,focus:'phone',props:{...INITIAL_PROPS,phone:'incoming',message:'明早需要去车站接你吗？'}}));
   expect(html).toContain('Mira 的手机');expect(html).toContain('明早需要去车站接你吗');expect(html).not.toMatch(/debug|模拟嘴型|测试|Notification/);
  });
 });

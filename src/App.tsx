@@ -89,7 +89,7 @@ export function App() {
       <div className="character-wrap"><Character state={state}/></div>
       <div className="table"><div className="coffee"><i/><i/><span/></div><div className="table-note">stay a little longer.</div></div>
 
-      <div className="scene-props"><Narrative text="" props={state.stageProps} revealed={state.photo}/></div>
+      <div className="scene-props"><Narrative text="" props={state.stageProps} focus={state.propFocus}/></div>
     </section>
     <section ref={hudRef} className="interaction" aria-label="与 Mira 对话">
       <div ref={streamRef} className="dialogue-stream">

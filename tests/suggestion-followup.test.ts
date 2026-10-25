@@ -10,7 +10,7 @@ import type {AudioPlayer} from '../src/core/audio';
 const phoneChoices=['是旅馆发来的消息吗？','你看起来还没想好怎么回。','不想说也没关系。'];
 const segment=(text:string,beat?:Reply['segments'][number]['beat']):Reply=>({segments:[{text,emotion:'curious',action:'idle',...(beat?{beat}:{})}],story:{intent:'engage'}});
 const repeated:Reply={...segment('嗯，在想要不要让他们来接，几句话打了又删。'),suggestions:phoneChoices};
-const opening=[segment('你先坐，这里没有漏雨。','arrival'),segment('啊，风把照片吹过去了。','photo-drift'),segment('是旅馆那边发来的。我还没回复。','phone-message')];
+const opening=[segment('你先坐，这里没有漏雨。','arrival'),segment('啊，风把照片吹过去了。','photo-drift'),{...segment('是旅馆那边发来的。我还没回复。','phone-message'),suggestions:phoneChoices}];
 const commission:Reply={...segment('这是我第一份有偿摄影委托，明早七点去照片里的小旅馆。回信还没发。','commission'),suggestions:['你已经决定要去了吗？','为什么还没发回信？','这家旅馆怎么找到你的？']};
 async function harness(replies:unknown[],audio?:AudioPlayer){
  const bodies:any[]=[],requests:any[]=[],acks:any[]=[];const jobs:Promise<unknown>[]=[];

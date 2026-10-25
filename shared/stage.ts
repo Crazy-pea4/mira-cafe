@@ -8,6 +8,7 @@ export const stageCueSchema = z.object({
   message: z.string().trim().min(1).max(180).optional(),
 }).strict();
 export type StageCue = z.infer<typeof stageCueSchema>;
+export type PropFocus='none'|'photo'|'phone';
 export type StageProps = { photoPose:'aside'|'near'|'returned'; phone:'none'|'incoming'|'resting'|'draft'|'sent'; message:string };
 export const INITIAL_PROPS:StageProps = {photoPose:'aside',phone:'none',message:''};
 export function applyCue(props:StageProps,cue:StageCue):StageProps {

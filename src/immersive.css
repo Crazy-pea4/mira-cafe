@@ -137,3 +137,28 @@ html, body, #root { width:100%; height:100%; overflow:hidden; }
 .composer .talk>span:last-child{min-width:0}
 .composer .talk small{white-space:nowrap}
 @media(max-width:600px){.composer .talk{flex-basis:102px;width:102px}}
+
+/* A story close-up appears only for the current event, never as a permanent menu. */
+.scene-props:has(.story-moment){width:330px;max-width:calc(100% - 28px);max-height:28%;overflow:auto}
+.scene-props .story-moment,.scene-props .story-moment:not(:has(.story-phone)){display:block;margin:0}
+.story-photograph{box-sizing:border-box;width:178px;margin:7px 10px;padding:9px 9px 12px;background:#efe1c5;color:#544b3f;box-shadow:0 8px 26px #10131b66;transform:rotate(-4deg);animation:photo-arrive .65s ease-out both}
+.story-photograph .photo-landscape{height:100px}
+.story-photograph figcaption{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+.story-photograph figcaption span{font-size:10px;letter-spacing:.3px}
+.story-photograph figcaption strong{font-weight:500;font-size:13px;white-space:nowrap}
+.scene-props .story-phone{box-sizing:border-box;width:100%;max-width:330px;margin:0;padding:16px 18px 18px;border:2px solid #ada69a66;border-radius:20px;background:linear-gradient(140deg,#292b34f5,#191d28f5);box-shadow:0 8px 28px #0d111b66}
+.phone-owner{color:#dfd5c6;font-size:12px;margin:0 0 12px}
+.scene-props .phone-top{font-size:11px;letter-spacing:0}
+.scene-props .story-phone p{font-size:14px;line-height:1.65;margin-top:10px}
+@keyframes photo-arrive{from{transform:translate(48px,-5px) rotate(7deg);opacity:0}to{transform:translate(0,0) rotate(-4deg);opacity:1}}
+@media(max-width:600px){
+ .scene-props:has(.story-moment){width:260px;max-height:24%}
+ .story-photograph{width:146px;padding:7px 7px 9px}
+ .story-photograph .photo-landscape{height:77px}
+ .story-photograph figcaption span{font-size:9px}
+ .story-photograph figcaption strong{font-size:12px}
+ .scene-props .story-phone{padding:12px 14px 14px;border-radius:17px;max-height:110px;overflow:auto}
+ .phone-owner{font-size:11px;margin-bottom:9px}
+ .scene-props .story-phone p{font-size:12px}
+}
+@media(prefers-reduced-motion:reduce){.story-photograph{animation:none}}

@@ -116,7 +116,7 @@ export function contextualSuggestions(state:StoryView,text='',proposal?:StoryPro
  if(state.facts.includes('ticket'))return['他们希望拍什么？','你最犹豫的是哪一部分？','也可以先把需要问的写下来。'];
  if(state.facts.includes('commission'))return['你已经决定要去了吗？','为什么还没发回信？','这家旅馆怎么找到你的？'];
  if('disclosures' in state&&/拍|委托/.test((state as StoryState).disclosures.commission??''))return['是怎样的拍摄邀请？','什么让你迟迟没回信？','先慢慢讲，我在听。'];
- if(state.facts.includes('phone-message'))return /怎么回|没想好|没回|犹豫|打了又删/.test(text)?['是什么事让你拿不定主意？','你愿意说说难在哪儿吗？','不急，我们可以慢慢聊。']:['是旅馆发来的消息吗？','你看起来还没想好怎么回。','不想说也没关系。'];
+ if(state.facts.includes('phone-message'))return /怎么回|没想好|没回|犹豫|打了又删/.test(text)?['是什么事让你拿不定主意？','你愿意说说难在哪儿吗？','不急，我们可以慢慢聊。']:['你和这家旅馆很熟吗？','你看起来还没想好怎么回。','不想说也没关系。'];
  if(state.facts.includes('photo-drift'))return['给你，照片别沾到水。','这张照片是你拍的吗？','我把杯子挪开，你自己拿吧。'];
  if(state.facts.includes('arrival'))return['刚才进门时风可真大。','你桌上放的是照片吗？','我先暖暖手。'];
  return['谢谢，外面雨太大了。','你也在这里躲雨？','我就坐一会儿，不打扰你。'];
