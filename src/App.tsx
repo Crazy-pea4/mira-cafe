@@ -1,4 +1,5 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { bindSceneViewport } from './core/scene-viewport';
 import { SceneAudio } from './core/scene-audio';
 import { bindAudioLifecycle } from './core/audio-lifecycle';
 import { VoiceInput } from './core/voice-input';
@@ -23,6 +24,22 @@ export function App() {
   const state = useSyncExternalStore(engine.subscribe, engine.getSnapshot, engine.getSnapshot);
   const input = useSyncExternalStore(entry.subscribe, entry.getSnapshot, entry.getSnapshot);
   const voiceButton = voiceButtonView(input);
+  const sceneRef = useRef<HTMLElement>(null), hudRef = useRef<HTMLElement>(null), streamRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const scene = sceneRef.current, hud = hudRef.current;
+    if (!scene || !hud) return;
+    const unbind = bindSceneViewport(window, scene.style);
+    const measure = () => {
+      scene.style.setProperty('--hud-height', `${hud.getBoundingClientRect().height}px`);
+      if (streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight;
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(hud); measure();
+    return () => { observer.disconnect(); unbind(); };
+  }, []);
+  useEffect(() => {
+    if (streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight;
+  }, [state.turnId, state.subtitle, state.narration, state.status]);
   const [text, setText] = useState('');
   const [inputSource, setInputSource] = useState<InputSource>('text');
   const [backgroundReady, setBackgroundReady] = useState(false);
@@ -52,7 +69,7 @@ export function App() {
     end: () => engine.endListening(),
   }); };
   const active = state.status === 'speaking' || state.status === 'thinking' || state.status==='narrating';
-  return <main className={`app scene-${state.scene}`}>
+  return <main ref={sceneRef} className={`app scene-${state.scene}`}>
     <div className="ambient-grain"/>
     <header className="topbar">
       <a className="brand" href="/" aria-label="Mira Café 首页"><span className="brand-icon">☾</span><span>MIRA <b>CAFÉ</b></span></a>
@@ -70,6 +87,12 @@ export function App() {
       <div className="character-wrap"><Character state={state}/></div>
       <div className="table"><div className="coffee"><i/><i/><span/></div><div className="table-note">stay a little longer.</div></div>
 
+      <div className="scene-props"><Narrative text="" props={state.stageProps} revealed={state.photo}/></div>
+    </section>
+    <section ref={hudRef} className="interaction" aria-label="与 Mira 对话">
+      <div ref={streamRef} className="dialogue-stream">
+        {state.narration && <p className="narration" aria-live="polite">{state.narration}</p>}
+        <UserMessage text={state.lastInput} source={inputSource}/>
       <div className="dialogue-area">
         <div className="character-meta"><div><span className="name">Mira</span><span className="descriptor">旅行摄影师 · 26</span></div><span className={`state-badge ${state.status}`} data-testid="state"><i/>{STATUS[state.status]}</span></div>
         <div className="subtitle-box">
@@ -80,10 +103,7 @@ export function App() {
         {state.notice && !(input.showMessage && state.notice === input.message) && <div className="notice" role="status">{state.notice}</div>}
         {audioNotice && !state.notice.includes(audioNotice) && <div className="notice" role="status">{audioNotice}</div>}
       </div>
-    </section>
-    <section className="interaction" aria-label="与 Mira 对话">
-      <Narrative text={state.narration} props={state.stageProps} revealed={state.photo}/>
-      <UserMessage text={state.lastInput} source={inputSource}/>
+      </div>
       <Suggestions values={state.suggestions} onChoose={value=>send(value)}/>
       <form className="composer" onSubmit={event => { event.preventDefault(); send(text); }}>
         <input value={text} onChange={event => setText(event.target.value)} aria-label="对 Mira 说点什么" placeholder="对 Mira 说点什么…" maxLength={800}/>
@@ -101,7 +121,6 @@ export function App() {
       </form>
       {input.showMessage && <p className="voice-help" role="status" data-testid="voice-help" data-recording={input.phase === 'recording'}>{input.message}</p>}
     </section>
-    <footer className="page-footer"><span>A LITTLE RAIN. A LITTLE COMPANY.</span></footer>
   </main>;
 }
 
