@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { App } from '../src/App';
+import { ModeBadge } from '../src/ModeBadge';
 import { bindAudioLifecycle } from '../src/core/audio-lifecycle';
 import { SceneAudio } from '../src/core/scene-audio';
 import { PcmSpeechPlayer } from '../src/core/pcm-playback';
@@ -34,9 +35,16 @@ describe('trusted interaction and page lifecycle, fake audio only', () => {
     vi.stubGlobal('fetch', fetch); vi.stubGlobal('AudioContext', device); vi.stubGlobal('WebSocket', socket);
     vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: device } }); vi.stubGlobal('window', { speechSynthesis: { speak } });
     const html = renderToStaticMarkup(createElement(App));
-    expect(html).toContain('回复默认有声'); expect(html).toContain('发送文字'); expect(html).toContain('检查语音');
-    expect(html).not.toMatch(/声音关闭|声音开启|体验工具|下一轮演示|演示朗读失败|输入模式/);
+    expect(html).toContain('雨停之前'); expect(html).toContain('发送文字'); expect(html).toContain('正在连接');
+    expect(html).not.toMatch(/声音关闭|声音开启|体验工具|下一轮演示|演示朗读失败|输入模式|已确认立绘|嘴型|静音模拟|本地开发|PHASE|DeepSeek|MOCK|默认有声|真实语音转文字|本地预留/);
     for (const stub of [fetch, device, speak, socket]) expect(stub).not.toHaveBeenCalled();
+  });
+  it('labels the no-key dialogue experience as demo mode without technical jargon', () => {
+    const html = renderToStaticMarkup(createElement(ModeBadge, { provider: 'mock' }));
+    expect(html).toContain('演示模式'); expect(html).not.toMatch(/MOCK|API|provider/);
+  });
+  it.each([null, 'deepseek'])('omits model/development labels when provider is %s', provider => {
+    expect(renderToStaticMarkup(createElement(ModeBadge, { provider }))).toBe('');
   });
   it.each(['pointerdown', 'click', 'keydown'])('unlocks on trusted %s, without a dedicated sound button', async type => {
     const s = setup(); expect(s.audio.unlockFromGesture).not.toHaveBeenCalled();

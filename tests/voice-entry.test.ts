@@ -23,10 +23,10 @@ function setup() {
 describe('visible voice entry with fake permission, capture and ASR only',()=>{
  it('selects real speech from health, separates permission from holding, and survives permission-popup blur',async()=>{
   const s=setup();expect(voiceButtonView(s.entry.getSnapshot()).disabled).toBe(true);
-  s.entry.configure(true,true);expect(voiceButtonView(s.entry.getSnapshot()).label).toBe('启用麦克风');
+  s.entry.configure(true,true);expect(voiceButtonView(s.entry.getSnapshot()).label).toBe('启用麦克风');expect(s.entry.getSnapshot().showMessage).toBe(false);
   s.entry.press(s.callbacks);s.entry.release();expect(s.captures).toHaveLength(0);
   const preparation=s.entry.prepare(s.callbacks.notice);s.entry.blur();s.entry.release();
-  expect(s.openAsr).not.toHaveBeenCalled();expect(s.entry.getSnapshot().permission).toBe('pending');
+  expect(s.openAsr).not.toHaveBeenCalled();expect(s.entry.getSnapshot().permission).toBe('pending');expect(s.entry.getSnapshot().showMessage).toBe(true);
   s.permission.resolve();await preparation;
   expect(voiceButtonView(s.entry.getSnapshot()).label).toBe('按住说话');expect(s.callbacks.notice).toHaveBeenCalledWith(expect.stringContaining('现在按住'));
   expect(s.openAsr).not.toHaveBeenCalled();expect(s.captures).toHaveLength(0);
@@ -36,13 +36,14 @@ describe('visible voice entry with fake permission, capture and ASR only',()=>{
   const s=setup();s.entry.configure(true,true);s.permission.resolve();await s.entry.prepare(s.callbacks.notice);
   s.entry.press(s.callbacks);await flush();s.captures[0].frame(new Uint8Array(8000));
   expect(voiceButtonView(s.entry.getSnapshot()).label).toBe('松开识别');
+  expect(s.entry.getSnapshot()).toMatchObject({showMessage:true,phase:'recording'});expect(s.entry.getSnapshot().message).toContain('正在录音');
   s.entry.release();s.entry.cancelHeld();await flush();
   expect(s.captures[0].finish).toHaveBeenCalledOnce();expect(s.sessions[0].commit).not.toHaveBeenCalled();
   expect(s.sessions[0].signal.aborted).toBe(false);expect(voiceButtonView(s.entry.getSnapshot()).label).toBe('识别中…');
   s.sessions[0].ready.resolve();await flush();
   expect(s.sessions[0].append).toHaveBeenCalledOnce();expect(s.sessions[0].commit).toHaveBeenCalledOnce();
   s.sessions[0].result.resolve('我想喝咖啡');await flush();
-  expect(s.callbacks.text).toHaveBeenCalledExactlyOnceWith('我想喝咖啡');
+  expect(s.callbacks.text).toHaveBeenCalledExactlyOnceWith('我想喝咖啡');expect(s.entry.getSnapshot().showMessage).toBe(false);
   expect(voiceButtonView(s.entry.getSnapshot()).label).toBe('按住说话');s.entry.cancel();
  });
  it('rejects a short press without committing even if the socket was still connecting',async()=>{
@@ -55,7 +56,7 @@ describe('visible voice entry with fake permission, capture and ASR only',()=>{
  it('allows retrying permission denial without opening a provider or silently switching to mock',async()=>{
   const s=setup();s.entry.configure(true,true);
   const preparation=s.entry.prepare(s.callbacks.notice);s.permission.reject(new Error('麦克风权限未开启'));await preparation;
-  expect(s.entry.getSnapshot()).toMatchObject({mode:'live',permission:'needed'});expect(s.openAsr).not.toHaveBeenCalled();
+  expect(s.entry.getSnapshot()).toMatchObject({mode:'live',permission:'needed',showMessage:true});expect(s.openAsr).not.toHaveBeenCalled();
   expect(s.callbacks.notice).toHaveBeenCalledWith('麦克风权限未开启');s.entry.cancel();
  });
  it('does not enable a late permission result after the user selects another mode',async()=>{
@@ -71,15 +72,15 @@ describe('visible voice entry with fake permission, capture and ASR only',()=>{
  });
  it('automatically exposes honest mock speech without a mode picker when Qwen is not configured',()=>{
   const s=setup();s.entry.configure(false,false);
-  expect(s.entry.getSnapshot().mode).toBe('mock');expect(voiceButtonView(s.entry.getSnapshot()).label).toBe('模拟台词');
-  expect(voiceButtonView(s.entry.getSnapshot()).detail).toBe('不识别讲话');
+  expect(s.entry.getSnapshot().mode).toBe('mock');expect(voiceButtonView(s.entry.getSnapshot()).label).toBe('体验对白');
+  expect(voiceButtonView(s.entry.getSnapshot()).detail).toBe('示例，不录音');
   s.entry.press(s.callbacks);s.entry.release();expect(s.callbacks.mock).toHaveBeenCalledOnce();
   expect(s.requestPermission).not.toHaveBeenCalled();expect(s.openAsr).not.toHaveBeenCalled();s.entry.cancel();
  });
  it('allows only an explicitly selected demo in a real-configured app, with no microphone',()=>{
   const s=setup();s.entry.configure(true,true);s.entry.select('mock');s.entry.press(s.callbacks);s.entry.release();
   expect(s.callbacks.mock).toHaveBeenCalledOnce();expect(s.requestPermission).not.toHaveBeenCalled();expect(s.openAsr).not.toHaveBeenCalled();
-  expect(voiceButtonView(s.entry.getSnapshot()).detail).toBe('不识别讲话');s.entry.cancel();
+  expect(voiceButtonView(s.entry.getSnapshot()).detail).toBe('示例，不录音');s.entry.cancel();
  });
  it('drops recognition after focus loss and after a newer recording replaces it',async()=>{
   const s=setup();s.entry.configure(true,true);s.permission.resolve();await s.entry.prepare(s.callbacks.notice);

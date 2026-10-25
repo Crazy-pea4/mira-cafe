@@ -61,7 +61,7 @@ export class ConversationEngine {
           catch (error) {
             if (!current() || isAbort(error)) return;
             present('simulated');
-            this.update({ notice: [replyNotice, error instanceof AudioPlaybackBlocked ? AUDIO_BLOCKED_NOTICE : '语音暂时不可用，当前保留字幕演出。'].filter(Boolean).join(' ') });
+            this.update({ notice: [replyNotice, error instanceof AudioPlaybackBlocked ? AUDIO_BLOCKED_NOTICE : '暂时无法播放语音，你可以继续看字幕。'].filter(Boolean).join(' ') });
             await delay(this.fallbackMs(sentence), signal);
           }
           if (!current()) return;

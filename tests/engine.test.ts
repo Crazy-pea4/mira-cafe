@@ -98,7 +98,7 @@ describe('conversation cancellation and presentation', () => {
   it('keeps a text-only degradation notice through silent fallback without inventing visual events', async () => {
     vi.useFakeTimers(); const { transport, audio, engine } = setup(); audio.fail = true;
     const run = engine.submit('hello'); transport.calls[0].task.resolve({ ...response(1), notice: 'REPLY_TEXT_ONLY' }); await flush();
-    expect(engine.getSnapshot().notice).toContain('仅保留可用对白'); expect(engine.getSnapshot().notice).toContain('字幕演出');
+    expect(engine.getSnapshot().notice).toContain('仅保留对白'); expect(engine.getSnapshot().notice).toContain('字幕');
     expect(engine.getSnapshot().photo).toBe(false); await vi.advanceTimersByTimeAsync(100); await run;
   });
   it('also cancels the timed fallback and never runs its next visual event', async () => {

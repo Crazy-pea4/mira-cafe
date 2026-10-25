@@ -9,6 +9,7 @@ import { LocalSpeechTransport } from './core/speech-transport';
 import { ConversationEngine } from './core/engine';
 import { HttpTransport } from './core/transport';
 import { Character } from './Character';
+import { ModeBadge } from './ModeBadge';
 import { SCENE_ARTWORK } from './scene-artwork';
 import { UserMessage, type InputSource } from './UserMessage';
 const STATUS = { idle: '在等你开口', listening: '正在倾听', thinking: '正在想怎么说', speaking: '正在说话', error: '连接暂时中断' };
@@ -25,7 +26,7 @@ export function App() {
   const [inputSource, setInputSource] = useState<InputSource>('text');
   const [backgroundReady, setBackgroundReady] = useState(false);
   const [audioNotice, setAudioNotice] = useState('');
-  const [provider, setProvider] = useState('mock');
+  const [provider, setProvider] = useState<string | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     void fetch('/api/health', { signal: controller.signal }).then(r => { if (!r.ok) throw new Error('Unavailable'); return r.json(); }).then(d => {
@@ -54,8 +55,7 @@ export function App() {
     <div className="ambient-grain"/>
     <header className="topbar">
       <a className="brand" href="/" aria-label="Mira Café 首页"><span className="brand-icon">☾</span><span>MIRA <b>CAFÉ</b></span></a>
-      <div className="top-actions"><span className="mode-chip"><i/>{provider === 'deepseek' ? 'DeepSeek 文字' : 'MOCK 体验'}</span>
-      </div>
+      <div className="top-actions"><ModeBadge provider={provider}/></div>
     </header>
     <section className={'stage ' + (backgroundReady ? 'illustrated-stage' : '')} aria-label="夜雨咖啡馆互动场景">
       <img className="scene-illustration" src={SCENE_ARTWORK.src} alt={SCENE_ARTWORK.description}
@@ -69,16 +69,15 @@ export function App() {
       <div className="character-wrap"><Character state={state}/></div>
       <div className="table"><div className="coffee"><i/><i/><span/></div><div className="table-note">stay a little longer.</div></div>
       {state.photo && <div className="memory-card" role="img" aria-label="Mira 展示的照片：雨后的山间与一束光"><div className="photo-landscape"><i/><b/></div><p>雨停的那一天 <span>09 / 12</span></p></div>}
-      <div className="asset-note">已确认立绘 · 眨眼模拟 / {state.presentation === 'audio-clock' ? '播放状态嘴型，非音素' : '静音模拟嘴型'}</div>
       <div className="dialogue-area">
         <div className="character-meta"><div><span className="name">Mira</span><span className="descriptor">旅行摄影师 · 26</span></div><span className={`state-badge ${state.status}`} data-testid="state"><i/>{STATUS[state.status]}</span></div>
         <div className="subtitle-box">
           {state.status === 'error' ? <div className="error-content" role="alert"><span>{state.error}</span><button onClick={() => void engine.retry()}>{provider === 'deepseek' ? '重新请求（会计费）' : '重试这一句 ↻'}</button></div>
-            : <p aria-live="polite" data-testid="subtitle">{state.status === 'listening' ? (input.mode === 'live' ? input.message : '我在听。松开后将发送预设的模拟语音台词。') : state.subtitle || (state.status === 'thinking' ? <span className="thinking-dots"><i/><i/><i/></span> : '你可以继续说，我在这里。')}</p>}
+            : <p aria-live="polite" data-testid="subtitle">{state.status === 'listening' ? (input.mode === 'live' ? '我在听。' : '松开后，就从这个话题聊起吧。') : state.subtitle || (state.status === 'thinking' ? <span className="thinking-dots"><i/><i/><i/></span> : '你可以继续说，我在这里。')}</p>}
           {active && <button className="interrupt" onClick={() => engine.interrupt()} aria-label="立即打断当前回复">■ 打断</button>}
         </div>
-        {state.notice && <div className="notice" role="status">{state.notice}</div>}
-        {audioNotice && audioNotice !== state.notice && <div className="notice" role="status">{audioNotice}</div>}
+        {state.notice && !(input.showMessage && state.notice === input.message) && <div className="notice" role="status">{state.notice}</div>}
+        {audioNotice && !state.notice.includes(audioNotice) && <div className="notice" role="status">{audioNotice}</div>}
       </div>
     </section>
     <section className="interaction" aria-label="与 Mira 对话">
@@ -94,14 +93,13 @@ export function App() {
           onPointerUp={() => entry.release()} onPointerCancel={() => entry.cancelHeld()} onLostPointerCapture={() => entry.cancelHeld()}
           onKeyDown={event => { if ((event.key === ' ' || event.key === 'Enter') && !event.repeat && entry.canHold()) { event.preventDefault(); hold(); } }}
           onKeyUp={event => { if ((event.key === ' ' || event.key === 'Enter') && entry.canHold()) { event.preventDefault(); entry.release(); } }}
-          onBlur={() => entry.cancelHeld()} aria-label={input.mode === 'mock' ? '模拟台词（不录音，不识别讲话）' : entry.needsPermission() ? '启用麦克风（授权后再按住说话）' : voiceButton.label + '，' + voiceButton.detail}>
+          onBlur={() => entry.cancelHeld()} aria-label={input.mode === 'mock' ? '体验对白（示例，不使用麦克风）' : entry.needsPermission() ? '启用麦克风（授权后再按住说话）' : voiceButton.label + '，' + voiceButton.detail}>
           <span className="mic-icon">♩</span><span>{voiceButton.label}<small>{voiceButton.detail}</small></span>
         </button>
       </form>
-      <p className="voice-help" role="status" data-testid="voice-help">{input.message}</p>
-      <div className="interaction-footer"><span>回复默认有声 <i>·</i> {input.mode === 'live' ? '按住录音 → 松开识别；文字显示为你的消息并发送' : '模拟台词不会录音；打断可停止回复'}</span></div>
+      {input.showMessage && <p className="voice-help" role="status" data-testid="voice-help" data-recording={input.phase === 'recording'}>{input.message}</p>}
     </section>
-    <footer className="page-footer"><span>A LITTLE RAIN. A LITTLE COMPANY.</span><span>本地开发预览 / PHASE 02</span></footer>
+    <footer className="page-footer"><span>A LITTLE RAIN. A LITTLE COMPANY.</span></footer>
   </main>;
 }
 

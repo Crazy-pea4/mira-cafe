@@ -15,9 +15,9 @@ export function Character({ state }: { state: Snapshot }) {
  const talking=state.status==='speaking'&&frames.mouth;
  const layer=(src:string,className:string,visible=true)=>!missing.includes(src)&&<img key={src+className} className={`portrait-patch ${className} ${visible?'visible':''}`} src={src} width={1024} height={1536} alt="" draggable={false} onError={()=>setMissing(old=>[...old,src])}/>;
  return <div className={`character character-portrait action-${state.action} status-${state.status}`} role="img"
-  aria-label={`Mira，${MOODS[state.emotion]}；眨眼为模拟；嘴型为${state.presentation==='audio-clock'?'播放状态':'静音模拟'}驱动，非音素口型`}
+  aria-label={`Mira，${MOODS[state.emotion]}`}
   data-emotion={state.emotion} data-blink={frames.blink} data-mouth={talking} data-drive={state.presentation}>
-  {failed?<div className="portrait-fallback">Mira 立绘暂时未加载<br/><small>对话仍可继续，刷新后重试</small></div>:
+  {failed?<div className="portrait-fallback">画面暂时没加载出来<br/><small>你仍可以和 Mira 聊天</small></div>:
    <div className="portrait-canvas">
     <img className="portrait-image" src={MIRA_ASSETS.neutral} width={1024} height={1536} alt="" draggable={false} fetchPriority="high" onError={()=>setFailed(true)}/>
     {expression&&layer(expression,`expression-patch expression-${state.emotion}`)}

@@ -13,7 +13,7 @@ export class VoiceInput {
     this.operation = op;
     const current = () => this.operation === op && !op.controller.signal.aborted;
     const pending: Uint8Array[] = [];
-    callbacks.phase?.('preparing'); callbacks.state('正在准备录音，请看到“正在录音”后开始说话。');
+    callbacks.phase?.('preparing'); callbacks.state('正在准备麦克风，请稍候…');
     const fail = (message: string) => { if (current()) { this.cancel(); callbacks.error(message); } };
     op.timer = setTimeout(() => fail('麦克风初始化超时，请重新按住说话。'), 8000);
     try {
@@ -26,13 +26,13 @@ export class VoiceInput {
       if (!current()) return;
       clearTimeout(op.timer); op.captured = true;
       op.timer = setTimeout(() => fail('录音已达到 30 秒上限，请重新分段录制。'), 30000);
-      callbacks.phase?.('recording'); callbacks.state('正在录音，请说话；松开后停止并识别。');
+      callbacks.phase?.('recording'); callbacks.state('正在录音 · 松开后转成文字');
       op.asr = this.transport.openAsr(turnId, op.controller.signal);
       op.connection = op.asr.ready.then(() => {
         if (!current()) return;
         for (const pcm of pending) op.asr!.append(pcm);
         pending.length = 0; op.ready = true;
-        if (!op.finishing) callbacks.state('正在录音并发送到 Qwen；松开停止并识别。');
+        if (!op.finishing) callbacks.state('正在录音 · 松开后转成文字');
       });
       await op.connection;
     } catch (error) { if (!isAbort(error)) fail(error instanceof Error ? error.message : '无法开始录音，请重试。'); }
@@ -46,7 +46,7 @@ export class VoiceInput {
       await this.capture.finish();
       if (this.operation !== op || op.controller.signal.aborted) return;
       if (op.bytes < MIN_RECORDING_BYTES) { this.cancel(); op.callbacks.error('录音太短，请按住再说一句。'); return; }
-      op.callbacks.state('录音已停止，正在识别……');
+      op.callbacks.state('录音已停止，正在转成文字…');
       await op.connection;
       if (this.operation !== op || op.controller.signal.aborted) return;
       const text = await op.asr!.commit();

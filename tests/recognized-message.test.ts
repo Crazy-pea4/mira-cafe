@@ -32,8 +32,8 @@ describe('recognized speech becomes visible user text using fake capture and pro
     expect(s.turn.mock.calls[0][0].text).toBe('雨停了， 一起喝咖啡吗？');
     expect(s.engine.getSnapshot().lastInput).toBe('雨停了， 一起喝咖啡吗？');
     const html = renderToStaticMarkup(createElement(UserMessage, { text: s.engine.getSnapshot().lastInput, source: 'asr' }));
-    expect(html).toContain('你最近发送的消息'); expect(html).toContain('语音识别'); expect(html).toContain('雨停了， 一起喝咖啡吗？');
-    expect(s.callbacks.state).toHaveBeenLastCalledWith('录音已停止，正在识别……');
+    expect(html).toContain('你最近发送的消息'); expect(html).toContain('语音转写'); expect(html).toContain('雨停了， 一起喝咖啡吗？');
+    expect(s.callbacks.state).toHaveBeenLastCalledWith('录音已停止，正在转成文字…');
     expect(s.finish).toHaveBeenCalledOnce(); s.engine.dispose();
   });
   it.each(['', ' \n\t ', '……？！', '\u0000\u0007', { text: 'not a string' }, null, '字'.repeat(801)])('does not submit malformed or empty recognition (%j)', async value => {
@@ -48,7 +48,7 @@ describe('recognized speech becomes visible user text using fake capture and pro
     await s.record(); expect(s.turn).toHaveBeenCalledOnce(); expect(s.turn.mock.calls[0][0].text).toBe('再来一杯'); expect(s.engine.getSnapshot().notice).toBe(''); s.engine.dispose();
   });
   it('keeps simulated voice explicitly labeled and renders recognized markup only as text', () => {
-    expect(renderToStaticMarkup(createElement(UserMessage, { text: '预设台词', source: 'mock-voice' }))).toContain('模拟语音 · 预设台词');
+    expect(renderToStaticMarkup(createElement(UserMessage, { text: '预设台词', source: 'mock-voice' }))).toContain('示例对白');
     const html = renderToStaticMarkup(createElement(UserMessage, { text: '<script>test</script>', source: 'asr' }));
     expect(html).not.toContain('<script>'); expect(html).toContain('&lt;script&gt;');
     expect(renderToStaticMarkup(createElement(UserMessage, { text: '', source: 'asr' }))).toBe('');

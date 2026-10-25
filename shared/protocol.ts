@@ -9,7 +9,7 @@ export const segmentSchema = z.object({
   scene: sceneSchema.optional(),
   event: z.literal('reveal-photo').optional(),
 }).strict();
-export const REPLY_TEXT_ONLY_NOTICE = '本次仅保留可用对白，未采用不合规的演出指令。';
+export const REPLY_TEXT_ONLY_NOTICE = '这次仅保留对白，场景动作暂未同步。';
 export const replySchema = z.object({ segments: z.array(segmentSchema).min(1).max(3), notice: z.literal('REPLY_TEXT_ONLY').optional() }).strict();
 export const historySchema = z.object({ role: z.enum(['user', 'assistant']), content: z.string().min(1).max(800) }).strict();
 export const turnRequestSchema = z.object({
