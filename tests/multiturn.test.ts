@@ -21,7 +21,7 @@ async function harness(responses:string[], audio?:AudioPlayer, retry=false){
  },fact=>facts.push(fact));
  const app=buildApp(retry?retryDialogue(provider):provider);await app.ready();
  vi.stubGlobal('fetch',async(url:string,init:RequestInit)=>{
-  expect(['/api/turn','/api/cancel']).toContain(url);
+  expect(['/api/turn','/api/cancel','/api/presented']).toContain(url);
   const pending=app.inject({method:'POST',url,headers:{origin:'http://127.0.0.1:3001',host:'127.0.0.1:3001'},payload:JSON.parse(init.body as string)});local.push(pending);
   const result=await pending;return new Response(result.body,{status:result.statusCode,headers:{'Content-Type':'application/json'}});
  });
@@ -37,7 +37,7 @@ describe('multi-turn application path: engine → HTTP → Fastify → provider,
    expect(h.bodies).toHaveLength(3);
    expect(h.bodies[2].messages.slice(0,-1)).toEqual(h.bodies[1].messages);
    expect(h.bodies[2].messages.at(-1).content).toContain('segments:too_small');
-   expect(JSON.parse(h.bodies[2].messages.find((m:any)=>m.role==='assistant').content)).toEqual(good);
+   expect(JSON.parse(h.bodies[2].messages.find((m:any)=>m.role==='assistant').content)).toMatchObject(good);
   }finally{await h.close();}
  });
  it('preserves one structured assistant per completed turn for three consecutive real application turns',async()=>{
@@ -50,7 +50,7 @@ describe('multi-turn application path: engine → HTTP → Fastify → provider,
    for(const body of h.bodies){
     expect(body).toMatchObject({thinking:{type:'disabled'},response_format:{type:'json_object'},max_tokens:650});
     expect(body.messages[0].content).toContain('只输出一个JSON对象');
-    for(const message of body.messages.filter((m:any)=>m.role==='assistant'))expect(replySchema.parse(JSON.parse(message.content))).toEqual(good);
+    for(const message of body.messages.filter((m:any)=>m.role==='assistant'))expect(replySchema.parse(JSON.parse(message.content))).toMatchObject(good);
    }
    expect(h.facts.map(f=>f.outcome)).toEqual(['accepted','accepted','accepted']);
    expect(h.facts[1]).toMatchObject({historyEntries:2,assistantMessages:1,jsonAssistantHistory:true,messageCount:4});
@@ -74,7 +74,7 @@ describe('multi-turn application path: engine → HTTP → Fastify → provider,
   try{
    await engine.submit('你好');await engine.submit('打断后聊旅行');
    const previous=JSON.parse(h.bodies[1].messages.find((m:any)=>m.role==='assistant').content);
-   expect(previous).toEqual({segments:[{text:'雨还没停。',emotion:'curious',action:'look-window'}]});
+   expect(previous).toMatchObject({segments:[{text:'雨还没停。',emotion:'curious',action:'look-window'}]});
    expect(JSON.stringify(previous)).not.toContain('坐一会儿吧');
    expect(engine.getSnapshot()).toMatchObject({status:'idle',completed:1});
   }finally{await h.close();}

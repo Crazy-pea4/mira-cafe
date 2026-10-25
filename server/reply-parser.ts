@@ -1,4 +1,5 @@
 import { modelReplySchema, replySchema, emotionSchema, actionSchema, sceneSchema, type Reply } from '../shared/protocol';
+import { suggestionSchema } from '../shared/story';
 import { zodValidationIssues } from './validation-feedback';
 import type { DiagnosticSink, ReplyDiagnostic, ReplyIssue } from './reply-diagnostics';
 export type ReplyFailure = 'INVALID_REPLY' | 'EMPTY_REPLY' | 'TRUNCATED_REPLY' | 'INCOMPLETE_REPLY' | 'FILTERED_REPLY' | 'REPLY_TOO_LONG';
@@ -53,11 +54,14 @@ export function parseDeepSeekReply(envelope: unknown, sink: DiagnosticSink = () 
     root = { text: raw }; issue('plain-text');
   }
   if (strict) {
-    const checked = modelReplySchema.safeParse(root);
+    const candidate=object(root)?{...root}:root;
+    const suggestions=object(candidate)?suggestionSchema.safeParse(candidate.suggestions):undefined;
+    if(object(candidate))delete candidate.suggestions;
+    const checked = modelReplySchema.safeParse(candidate);
     if (!checked.success) return reject('INVALID_REPLY','schema','对白未通过格式校验。',zodValidationIssues(checked.error.issues));
     facts.segmentCount = checked.data.segments.length;
     facts.outcome = facts.issues.length ? 'normalized' : 'accepted'; report();
-    return checked.data;
+    return {...checked.data,...(suggestions?.success?{suggestions:suggestions.data}:{})};
   }
   if (typeof root === 'string') {
     const text = root.trim();
