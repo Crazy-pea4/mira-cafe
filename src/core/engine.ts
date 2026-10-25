@@ -1,4 +1,4 @@
-import type { Action, CharacterStatus, Emotion, Fault, History, Scene } from '../../shared/protocol';
+import type { Action, CharacterStatus, Emotion, Fault, History, Reply, Scene } from '../../shared/protocol';
 import { turnResponseSchema, REPLY_TEXT_ONLY_NOTICE } from '../../shared/protocol';
 import { delay, isAbort } from '../../shared/async';
 import { AudioPlaybackBlocked, AUDIO_BLOCKED_NOTICE, type AudioPlayer } from './audio';
@@ -35,7 +35,9 @@ export class ConversationEngine {
     const current = () => this.snapshot.turnId === turnId && !signal.aborted;
     this.update({ status: 'thinking', lastInput: trimmed });
     const priorHistory = this.history.slice(-12);
-    this.history.push({ role: 'user', content: trimmed });
+    const userEntry: History[number] = { role: 'user', content: trimmed };
+    let assistantEntry: History[number] | undefined;
+    const heardSegments: Reply['segments'] = [];
     try {
       const parsed = turnResponseSchema.safeParse(await this.transport.turn({ sessionId: this.sessionId, turnId, text: trimmed, history: priorHistory, fault }, signal));
       if (!parsed.success) throw new Error('角色回复格式异常，请重试。');
@@ -45,6 +47,7 @@ export class ConversationEngine {
       if (response.turnId !== turnId) throw new Error('收到不匹配的回复，请重试。');
       this.update({ notice: replyNotice });
       for (const segment of response.segments) {
+        let heardSegment: Reply['segments'][number] | undefined;
         const sentences = segment.text.match(/[^。！？!?]+[。！？!?]?/g) ?? [segment.text];
         for (let index = 0; index < sentences.length; index++) {
           if (!current()) return;
@@ -66,7 +69,15 @@ export class ConversationEngine {
           }
           if (!current()) return;
           // Only fully presented sentences enter the next turn's history.
-          this.history.push({ role: 'assistant', content: sentence });
+          if (!heardSegment) { heardSegment = { ...segment, text: sentence }; heardSegments.push(heardSegment); }
+          else heardSegment.text += sentence;
+          // Keep a single JSON assistant message per turn, containing only fully
+          // presented text and the validated directives that accompanied it.
+          let retained = heardSegments.slice();
+          let content = JSON.stringify({ segments: retained });
+          while (content.length > 800 && retained.length > 1) { retained = retained.slice(1); content = JSON.stringify({ segments: retained }); }
+          if (!assistantEntry) { assistantEntry = { role: 'assistant', content }; this.history.push(userEntry, assistantEntry); }
+          else assistantEntry.content = content;
         }
       }
       if (current()) this.update({ presentation: 'none', status: 'idle', action: 'idle', completed: this.snapshot.completed + 1 });
@@ -74,6 +85,8 @@ export class ConversationEngine {
       if (!current() || isAbort(error)) return;
       this.update({ status: 'error', subtitle: '', action: 'idle', error: error instanceof Error ? error.message : '连接失败，请重试。' });
     } finally {
+      // Pending/failed user turns were never committed; neither rapid input
+      // nor an explicit retry inherits a phantom unanswered exchange.
       this.history = this.history.slice(-12);
       if (this.controller === controller) this.controller = undefined;
     }

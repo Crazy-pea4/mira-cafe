@@ -24,7 +24,7 @@ export function parseDeepSeekReply(envelope: unknown, sink: DiagnosticSink = () 
   const facts: ReplyDiagnostic = {
     event:'reply-format', outcome:'rejected',
     finishReason: finish == null ? 'missing' : typeof finish === 'string' && knownFinish.includes(finish) ? finish as ReplyDiagnostic['finishReason'] : 'other',
-    contentType:kind(content), contentLength:typeof content === 'string' ? Math.min(12001,content.length) : 0, segmentCount:0, issues:[],
+    trimmedLength:typeof content === 'string' ? Math.min(12001,content.trim().length) : 0, contentType:kind(content), contentLength:typeof content === 'string' ? Math.min(12001,content.length) : 0, segmentCount:0, issues:[],
   };
   if (object(envelope) && object(envelope.usage)) {
     for (const [source,target] of [['prompt_tokens','promptTokens'],['completion_tokens','completionTokens']] as const) {
@@ -107,6 +107,6 @@ export function parseDeepSeekReply(envelope: unknown, sink: DiagnosticSink = () 
   const output: Reply = textOnly ? { segments:splitText(combined).map(text=>({text,emotion:'guarded',action:'idle'})), notice:'REPLY_TEXT_ONLY' } : { segments };
   const checked = replySchema.safeParse(output);
   if (!checked.success) return reject('INVALID_REPLY','bad-envelope','回复未通过安全校验，已停止演出；未自动重试。');
-  if (facts.issues.length) { facts.outcome = textOnly ? 'text-only' : 'normalized'; report(); }
+  facts.outcome = textOnly ? 'text-only' : facts.issues.length ? 'normalized' : 'accepted'; report();
   return checked.data;
 }

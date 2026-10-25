@@ -12,7 +12,7 @@ const good={segments:[segment]};
 const wrap=(content:unknown,finish_reason:unknown='stop')=>({choices:[{finish_reason,message:{content}}],usage:{prompt_tokens:123,completion_tokens:45}});
 describe('bounded reply recovery without executing model commands',()=>{
  it('preserves a valid structured reply without inventing a notice',()=>{
-  const sink=vi.fn();expect(parseDeepSeekReply(wrap(JSON.stringify(good)),sink)).toEqual(good);expect(sink).not.toHaveBeenCalled();
+  const sink=vi.fn();expect(parseDeepSeekReply(wrap(JSON.stringify(good)),sink)).toEqual(good);expect(sink).toHaveBeenCalledWith(expect.objectContaining({outcome:'accepted',issues:[]}));
  });
  it.each([
   ['fenced','\u0060\u0060\u0060json\n'+JSON.stringify(good)+'\n\u0060\u0060\u0060'],
@@ -76,6 +76,18 @@ describe('bounded reply recovery without executing model commands',()=>{
   try{const file=join(dir,'last.json');writeReplyDiagnostic(sanitized as ReplyDiagnostic,file);expect(readFileSync(file,'utf8')).toBe(encoded);}
   finally{rmSync(dir,{recursive:true,force:true});}
   expect(safeReplyDiagnostic({...facts,finishReason:'secret-key'})).toBeUndefined();
+ });
+ it('bounds recent success/failure diagnostics, strips injected text, and preserves the last anomaly',()=>{
+  const dir=mkdtempSync(join(tmpdir(),'mira-recent-test-'));
+  try{
+   const file=join(dir,'last.json');const sink=vi.fn();expect(()=>parseDeepSeekReply(wrap(' '.repeat(11)),sink)).toThrow();
+   const failed=sink.mock.calls[0][0];writeReplyDiagnostic(failed,file);
+   const success=vi.fn();parseDeepSeekReply(wrap(JSON.stringify(good)),success);
+   for(let i=0;i<25;i++)writeReplyDiagnostic({...success.mock.calls[0][0],content:'private-text',authorization:'secret-value'} as ReplyDiagnostic,file);
+   const recent=readFileSync(join(dir,'recent-reply-diagnostics.json'),'utf8');
+   expect(JSON.parse(recent)).toHaveLength(20);expect(recent).not.toMatch(/private-text|secret-value|authorization/);
+   expect(JSON.parse(readFileSync(file,'utf8'))).toMatchObject({outcome:'rejected',contentLength:11,trimmedLength:0});
+  }finally{rmSync(dir,{recursive:true,force:true});}
  });
  it('does not let a diagnostic storage failure invalidate usable text',()=>{
   expect(parseDeepSeekReply(wrap(text),()=>{throw new Error('disk');}).notice).toBe('REPLY_TEXT_ONLY');

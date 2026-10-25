@@ -1,6 +1,7 @@
 import { emotionSchema, actionSchema, sceneSchema, type Reply, type TurnRequest } from '../shared/protocol';
 import { delay } from '../shared/async';
 import { parseDeepSeekReply, ReplyFormatError, type ReplyFailure } from './reply-parser';
+import { buildDialogueMessages } from './dialogue-history';
 import type { DiagnosticSink } from './reply-diagnostics';
 export class ProviderError extends Error {
   constructor(public code: 'TIMEOUT' | 'UNAVAILABLE' | ReplyFailure | 'NOT_CONFIGURED' | 'BUDGET_LIMIT', message: string) { super(message); }
@@ -48,11 +49,14 @@ export class DeepSeekProvider implements DialogueProvider {
   constructor(private apiKey: string, private model = 'deepseek-flash', private fetcher: typeof fetch = fetch, private diagnostics: DiagnosticSink = () => {}) {}
   async reply(request: TurnRequest, signal: AbortSignal): Promise<Reply> {
     if (!this.apiKey) throw new ProviderError('NOT_CONFIGURED', 'DeepSeek 尚未配置。请返回 Mock 模式，或在本机安全配置。');
+    const messages = buildDialogueMessages(SYSTEM, request);
+    const requestFacts = { historyEntries: request.history.length, assistantMessages: messages.filter(m=>m.role==='assistant').length, messageCount: messages.length, jsonAssistantHistory: true as const };
+    const diagnose: DiagnosticSink = facts => this.diagnostics({ ...facts, ...requestFacts });
     const response = await this.fetcher('https://api.deepseek.com/chat/completions', {
-      method: 'POST', signal,
+      method: 'POST', signal, redirect: 'error',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey}` },
       body: JSON.stringify({
-        model: this.model, messages: [{ role: 'system', content: SYSTEM }, ...request.history, { role: 'user', content: request.text }],
+        model: this.model, messages,
         response_format: { type: 'json_object' }, thinking: { type: 'disabled' }, max_tokens: 650, stream: false,
       }),
     });
@@ -60,10 +64,10 @@ export class DeepSeekProvider implements DialogueProvider {
     let data: unknown;
     try { data = await response.json(); }
     catch {
-      try { this.diagnostics({event:'reply-format',outcome:'rejected',finishReason:'missing',contentType:'missing',contentLength:0,segmentCount:0,issues:['bad-envelope']}); } catch {}
+      try { diagnose({event:'reply-format',outcome:'rejected',finishReason:'missing',contentType:'missing',contentLength:0,segmentCount:0,issues:['bad-envelope']}); } catch {}
       throw new ProviderError('INVALID_REPLY','服务返回了无法读取的响应，未自动重试。');
     }
-    try { return parseDeepSeekReply(data,this.diagnostics); }
+    try { return parseDeepSeekReply(data,diagnose); }
     catch (error) {
       if (error instanceof ReplyFormatError) throw new ProviderError(error.code,error.message);
       throw new ProviderError('INVALID_REPLY','回复未通过安全校验，未自动重试。');

@@ -61,7 +61,7 @@ describe('conversation cancellation and presentation', () => {
   it('survives ten rapid inputs and plays only the current response', async () => {
     const { transport, audio, engine } = setup(); const runs = Array.from({ length: 10 }, (_, i) => engine.submit('input ' + i));
     for (const call of transport.calls) call.task.resolve(response(call.request.turnId));
-    await flush(); expect(audio.calls).toHaveLength(1); expect(transport.calls.slice(0, -1).every(c => c.signal.aborted)).toBe(true);
+    await flush(); expect(transport.calls.every(c => c.request.history.length === 0)).toBe(true); expect(audio.calls).toHaveLength(1); expect(transport.calls.slice(0, -1).every(c => c.signal.aborted)).toBe(true);
     audio.calls[0].start(); audio.calls[0].task.resolve(); await Promise.all(runs); expect(engine.getSnapshot().completed).toBe(1);
   });
   it('does not retain unheard assistant sentences in history', async () => {
@@ -70,14 +70,14 @@ describe('conversation cancellation and presentation', () => {
     audio.calls[0].start(); audio.calls[0].task.resolve(); await flush(); audio.calls[1].start();
     const second = engine.submit('打断后的问题'); await first;
     const history = transport.calls[1].request.history;
-    expect(history.some(h => h.content === '听到的第一句。')).toBe(true);
-    expect(history.some(h => h.content === '没听完的第二句。')).toBe(false);
+    expect(history.some(h => h.content.includes('听到的第一句。'))).toBe(true);
+    expect(history.some(h => h.content.includes('没听完的第二句。'))).toBe(false);
     transport.calls[1].task.reject(new Error('stop')); await second;
   });
   it('offers a working retry after a recoverable provider error', async () => {
     const { transport, audio, engine } = setup(); const run = engine.submit('重试的问题', 'timeout');
     transport.calls[0].task.reject(new Error('模拟超时')); await run; expect(engine.getSnapshot().status).toBe('error');
-    const retry = engine.retry(); expect(transport.calls[1].request).toMatchObject({ text: '重试的问题', fault: 'none' });
+    const retry = engine.retry(); expect(transport.calls[1].request.history).toEqual([]); expect(transport.calls[1].request).toMatchObject({ text: '重试的问题', fault: 'none' });
     transport.calls[1].task.resolve(response(transport.calls[1].request.turnId)); await flush(); audio.calls[0].start(); audio.calls[0].task.resolve(); await retry;
     expect(engine.getSnapshot().error).toBe(''); expect(engine.getSnapshot().status).toBe('idle');
   });
