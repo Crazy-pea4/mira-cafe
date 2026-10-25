@@ -69,6 +69,13 @@ describe('visible voice entry with fake permission, capture and ASR only',()=>{
   expect(s.callbacks.mock).not.toHaveBeenCalled();expect(s.entry.getSnapshot().message).toContain('预算');
   s.entry.unavailable();expect(s.entry.getSnapshot().mode).toBe('live');expect(s.captures).toHaveLength(0);s.entry.cancel();
  });
+ it('automatically exposes honest mock speech without a mode picker when Qwen is not configured',()=>{
+  const s=setup();s.entry.configure(false,false);
+  expect(s.entry.getSnapshot().mode).toBe('mock');expect(voiceButtonView(s.entry.getSnapshot()).label).toBe('模拟台词');
+  expect(voiceButtonView(s.entry.getSnapshot()).detail).toBe('不识别讲话');
+  s.entry.press(s.callbacks);s.entry.release();expect(s.callbacks.mock).toHaveBeenCalledOnce();
+  expect(s.requestPermission).not.toHaveBeenCalled();expect(s.openAsr).not.toHaveBeenCalled();s.entry.cancel();
+ });
  it('allows only an explicitly selected demo in a real-configured app, with no microphone',()=>{
   const s=setup();s.entry.configure(true,true);s.entry.select('mock');s.entry.press(s.callbacks);s.entry.release();
   expect(s.callbacks.mock).toHaveBeenCalledOnce();expect(s.requestPermission).not.toHaveBeenCalled();expect(s.openAsr).not.toHaveBeenCalled();

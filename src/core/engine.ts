@@ -1,7 +1,7 @@
 import type { Action, CharacterStatus, Emotion, Fault, History, Scene } from '../../shared/protocol';
 import { turnResponseSchema, REPLY_TEXT_ONLY_NOTICE } from '../../shared/protocol';
 import { delay, isAbort } from '../../shared/async';
-import type { AudioPlayer } from './audio';
+import { AudioPlaybackBlocked, AUDIO_BLOCKED_NOTICE, type AudioPlayer } from './audio';
 import type { Transport } from './transport';
 export interface Snapshot {
   presentation: 'none' | 'simulated' | 'audio-clock'; status: CharacterStatus; turnId: number; subtitle: string; emotion: Emotion; action: Action;
@@ -61,7 +61,7 @@ export class ConversationEngine {
           catch (error) {
             if (!current() || isAbort(error)) return;
             present('simulated');
-            this.update({ notice: [replyNotice, '当前使用字幕演出（声音已关闭或语音暂时不可用）。'].filter(Boolean).join(' ') });
+            this.update({ notice: [replyNotice, error instanceof AudioPlaybackBlocked ? AUDIO_BLOCKED_NOTICE : '语音暂时不可用，当前保留字幕演出。'].filter(Boolean).join(' ') });
             await delay(this.fallbackMs(sentence), signal);
           }
           if (!current()) return;

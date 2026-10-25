@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { ConversationEngine } from '../src/core/engine';
-import type { AudioPlayer } from '../src/core/audio';
+import { AudioPlaybackBlocked, type AudioPlayer } from '../src/core/audio';
 import type { Transport } from '../src/core/transport';
 import type { TurnRequest, TurnResponse } from '../shared/protocol';
 import { abortError } from '../shared/async';
@@ -86,6 +86,14 @@ describe('conversation cancellation and presentation', () => {
     const run = engine.submit('hello'); transport.calls[0].task.resolve(response(1)); await flush();
     expect(engine.getSnapshot().status).toBe('speaking'); expect(engine.getSnapshot().notice).toContain('字幕');
     await vi.advanceTimersByTimeAsync(100); await run; expect(engine.getSnapshot().status).toBe('idle');
+  });
+  it('keeps subtitles and a clear hint when autoplay is blocked, without retrying the model', async () => {
+    vi.useFakeTimers(); const { transport, audio, engine } = setup();
+    audio.play = vi.fn(async () => { throw new AudioPlaybackBlocked(); });
+    const run = engine.submit('hello'); transport.calls[0].task.resolve(response(1)); await flush();
+    expect(engine.getSnapshot().notice).toContain('浏览器限制了声音');
+    expect(engine.getSnapshot()).toMatchObject({ presentation: 'simulated', subtitle: '这是本轮回复。' });
+    await vi.advanceTimersByTimeAsync(100); await run; expect(transport.calls).toHaveLength(1);
   });
   it('keeps a text-only degradation notice through silent fallback without inventing visual events', async () => {
     vi.useFakeTimers(); const { transport, audio, engine } = setup(); audio.fail = true;

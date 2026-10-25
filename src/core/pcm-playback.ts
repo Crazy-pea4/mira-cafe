@@ -1,5 +1,6 @@
 import { decodePcm16 } from '../../shared/pcm';
 import { abortError } from '../../shared/async';
+import { AudioPlaybackBlocked } from './audio';
 import type { SpeechTransport } from './speech-transport';
 export interface ScheduledPcm { stop(): void; }
 export interface PlaybackClock {
@@ -59,15 +60,32 @@ function browserClock(context: AudioContext): PlaybackClock {
 export class PcmSpeechPlayer {
   private context?: AudioContext; private clock?: PlaybackClock; private controller?: AbortController;
   constructor(private transport: SpeechTransport, private createContext = () => new AudioContext()) {}
+  get ready() { return !!this.clock && this.context?.state === 'running'; }
   async unlock() {
     this.context ??= this.createContext();
-    await this.context.resume();
-    if (this.context.state !== 'running') throw new Error('浏览器未允许声音，仍保持静音。');
-    this.clock = browserClock(this.context);
+    const context = this.context;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      // resume() runs synchronously inside the gesture; no silent buffer or welcome speech.
+      if (context.state !== 'running') await Promise.race([
+        context.resume(),
+        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new AudioPlaybackBlocked()), 1500); }),
+      ]);
+      if (this.context !== context) throw abortError();
+      if (context.state !== 'running') throw new AudioPlaybackBlocked();
+      this.clock = browserClock(context);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw error;
+      throw new AudioPlaybackBlocked();
+    } finally { clearTimeout(timer); }
   }
-  async suspend() { this.stop(); await this.context?.suspend(); }
+  dispose() {
+    this.stop();
+    const context = this.context; this.context = undefined; this.clock = undefined;
+    if (context) void context.close().catch(() => {});
+  }
   async play(text: string, turnId: number, signal: AbortSignal, onStart: () => void) {
-    if (!this.clock || !this.context || this.context.state !== 'running') throw new Error('请先明确开启声音。');
+    if (!this.clock || !this.context || this.context.state !== 'running') throw new AudioPlaybackBlocked();
     this.stop();
     const controller = new AbortController(); this.controller = controller;
     const cancel = () => controller.abort(); signal.addEventListener('abort', cancel, { once: true });

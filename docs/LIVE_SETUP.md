@@ -1,13 +1,13 @@
 # 本机真实服务配置（已完成三次限量连通测试）
 
-代码默认使用 Mock、静音。用户自行配置密钥后，已明确授权并完成一次 DeepSeek、一次 Chelsie TTS 和一次合成音频 ASR，共三次；没有录音、播放或重试。当前本机进程已通过启动环境选择真实模式，等待用户操作。DeepSeek + Qwen 合计测试预算人民币 10 元，不自动充值。详情、费用估算及接手步骤见 [LIVE_SMOKE](LIVE_SMOKE.md)。
+未配置时使用 Mock；产品回复默认有声，首次用户交互解锁，页面加载不自动朗读。用户自行配置密钥后，已明确授权并完成一次 DeepSeek、一次 Chelsie TTS 和一次合成音频 ASR，共三次；没有录音、播放或重试。当前本机进程已通过启动环境选择真实模式，等待用户操作。DeepSeek + Qwen 合计测试预算人民币 10 元，不自动充值。详情、费用估算及接手步骤见 [LIVE_SMOKE](LIVE_SMOKE.md)。
 
 ## 最少配置步骤
 
 1. 在 /Users/yemeng/Code/mira-cafe 自行复制 .env.example 为 .env；不要覆盖已有文件。可用 `cp -n .env.example .env`，再用本机编辑器打开 .env。
 2. 自行填写下表变量。不要把密钥粘贴进聊天、截图、前端代码或任何 VITE_ 变量。.env / .env.* 已被 Git 忽略（示例除外）。可自行执行 `chmod 600 .env` 限制文件读取。
 3. 示例已预填北京区域和官方兼容端点。自行填写 DEEPSEEK_API_KEY 与北京 DASHSCOPE_API_KEY；如账号要求工作空间，填写 DASHSCOPE_WORKSPACE_ID 并将 ASR 端点换成自己的北京工作空间域名。暂时保持两个开关 false，即可保存配置而不发起收费请求。
-4. 真正联调前核对账号价格/用量，再设置 MIRA_BILLING_CONFIRMED=true、MIRA_ENABLE_LIVE_APIS=true，按需设 MIRA_PROVIDER=deepseek、MIRA_SPEECH_PROVIDER=qwen。声音和录音须单独明确开启；本轮不测试。
+4. 真正联调前核对账号价格/用量，再设置 MIRA_BILLING_CONFIRMED=true、MIRA_ENABLE_LIVE_APIS=true，按需设 MIRA_PROVIDER=deepseek、MIRA_SPEECH_PROVIDER=qwen。录音仍须明确点击并授权；声音随正常对话回复播放。本轮 agent 不录音、不播放、不增加付费测试。
 5. 停止原有本项目服务，执行 `npm run build && npm run start:configured`，仍打开 http://127.0.0.1:3001/。普通 `npm start` 不加载 .env；开发时使用 `npm run dev:configured`。不要同时启动两个 API 服务。
 
 | 变量 | 作用 |
@@ -37,7 +37,7 @@
 - 松开立即结束采集并提交识别。成功后完整识别文字显示为“你 · 语音识别”消息，然后进入对话；模拟入口显示“模拟语音 · 预设台词”，不冒充真实识别。空白、纯标点、非文本或超过 800 字的异常结果只提示重录，不提交给文字模型。
 - 权限准备与按住录音分离，弹窗失焦不会误取消准备，允许后不自动开始录音。连接未就绪时松开会先停采集并保留有效PCM，等待连接后提交；短于250ms提示重录，最长30秒，手动提交，无VAD。
 - 新文字、新录音、切换模式、失焦、重置都会停止旧采集和识别；旧转写不进入新轮次。录音没有扬声器回放，麦克风处理节点输出为零。
-- 默认声音关闭。只有主动点击“开启声音（将播放角色语音）”才解锁播放；刷新恢复关闭。开启后下一次回复可能调用 Qwen TTS 并产生费用。不开启声音就不请求 TTS。
+- 默认回复有声，声音开关与体验面板已移除。首次用户点击/按键解锁播放，不发送欢迎音频；正常回复会请求已配置的 Qwen TTS 并收费。浏览器受限则保留字幕并提示，未解锁时不请求 TTS。刷新需要新的用户交互，不能自动出声。
 - localhost/127.0.0.1 或 HTTPS 才支持麦克风。服务只监听本机，本阶段不开放公网或手机局域网访问。
 
 ## 数据链路与边界
@@ -50,7 +50,7 @@ DeepSeek 检查结束状态、整理完整已知包装并经 Zod 校验后只提
 
 ## 真实验证仍待完成
 
-已确认北京与合计 10 元预算。用户已自行配置凭据并完成三次限量连通，后续自动付费测试已停止。用户可自行继续验证；AI 仍不得未经新授权录音、出声或付费重试。尚待真实设备验证：真实设备权限与采样率、PCM 链路、Qwen 实际事件顺序、模型可用性、真人听感、句子字幕对齐、连续打断、弱网重连和延迟/成本。当前 144 项自动化使用替身，不代表真人麦克风、听感或本次格式修复已获人工验收。
+已确认北京与合计 10 元预算。用户已自行配置凭据并完成三次限量连通，后续自动付费测试已停止。用户可自行继续验证；AI 仍不得未经新授权录音、出声或付费重试。尚待真实设备验证：真实设备权限与采样率、PCM 链路、Qwen 实际事件顺序、模型可用性、真人听感、句子字幕对齐、连续打断、弱网重连和延迟/成本。当前 158 项自动化使用替身，不代表真人麦克风、听感或本次格式修复已获人工验收。
 
 官方依据：
 - [DeepSeek chat completion](https://api-docs.deepseek.com/api/create-chat-completion/)
@@ -70,11 +70,11 @@ DeepSeek 检查结束状态、整理完整已知包装并经 Zod 校验后只提
 
 请求发送前写入被 Git 忽略的 .local/budget.json；跨进程写锁防止漏计。取消、超时、失败不退预留，重启不清零。记录损坏、写入失败、遗留锁均拒绝收费请求，不自动删锁或重置。不要为继续调用删除账本；须先停本项目进程、核对账单再处理。
 
-体验工具显示次数与预留，不显示虚假的实际消费；actualBilledCny 始终为 null。启动日志仅允许 started/start_failed、mock/deepseek 和端口，不输出 Error.message、完整请求/响应、Authorization、Key、工作空间配置、录音或对话。上游错误转换为固定安全提示。
+产品页不再展示体验工具或开发预算面板。只读 /api/health 仍提供次数与预留，不显示虚假的实际消费；actualBilledCny 始终为 null。启动日志仅允许 started/start_failed、mock/deepseek 和端口，不输出 Error.message、完整请求/响应、Authorization、Key、工作空间配置、录音或对话。上游错误转换为固定安全提示。
 
 价格来源：[DeepSeek 人民币价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)、[百炼模型价格](https://help.aliyun.com/zh/model-studio/model-pricing)。北京端点来源见上方 ASR/TTS 交互文档；ASR 官方推荐工作空间域名，TTS 当前官方示例仍列北京兼容域名。
 
-预置音色依据：2026-10-25 核对 [Qwen 官方音色表](https://help.aliyun.com/zh/model-studio/qwen-tts-voice-list)，实时 qwen3-tts-flash-realtime 列出千雪 Chelsie。最初核对文档与假网络参数；后续经授权完成一次未播放的真实 Chelsie 合成，见 LIVE_SMOKE.md。优先验证讲话转文字时可以保持声音关闭，且 MIRA_PROVIDER=mock，从而只测试 ASR；真实 ASR 仍需要两项收费开关和录音授权。
+预置音色依据：2026-10-25 核对 [Qwen 官方音色表](https://help.aliyun.com/zh/model-studio/qwen-tts-voice-list)，实时 qwen3-tts-flash-realtime 列出千雪 Chelsie。最初核对文档与假网络参数；后续经授权完成一次未播放的真实 Chelsie 合成，见 LIVE_SMOKE.md。当前产品不提供声音关闭按钮。真实 ASR 仍需要两项收费开关和录音授权，正常语音输入会继续触发已配置的文字和语音回复；不要把完整对话当作只会产生 ASR 费用。自动化通过假设备/服务分别验证，不新增真实请求。
 
 最新入口修复与假设备回归详见 [VOICE_INPUT_FIX](VOICE_INPUT_FIX.md)；真实服务可用时不再默认模拟入口。
 

@@ -2,11 +2,13 @@
 
 与 26 岁原创旅行摄影师 Mira 在雨夜咖啡馆相遇。当前是移动端优先的本地原型，已接入日系 Galgame 咖啡馆插画、确认的 Mira 及局部表情差分，并增加真实语音适配与预算保护，尚未完成整份 PDF 题目。
 
-**默认静音、无需密钥。** 模拟语音不会访问麦克风；松开按钮使用预设台词。只有用户主动点击右上角“声音关闭”按钮开启声音后，才允许浏览器朗读或已配置的 Qwen 播放。刷新后恢复静音。所有自动测试及当前浏览器验收都保持无声。
+**回复默认有声，无密钥可体验 Mock。** 按用户最新决定，右上角声音开关、右下角体验工具及面板已移除。首次真实点击/按键只解锁播放器，不播放欢迎词、不发模型请求、不录音；之后正常对话回复自动朗读。浏览器限制声音时显示简洁提示并保留字幕，不自动重新请求模型/TTS。打断立即停止；离开页面、切到后台或卸载会取消当前轮次并关闭播放器。
+
+**产品默认与测试规则分开：** 所有 agent 自动化继续使用假音频、假网络，不实际播放、录音或新增付费调用。用户自行正常使用时，已配置的 DeepSeek/Qwen 仍按请求收费。
 
 ## 启动
 
-当前可试玩地址：**http://127.0.0.1:3001/**（当前本机进程使用用户配置的 DeepSeek + 北京 Qwen，默认静音；不加载配置时为 Mock）。已有进程运行时无需重复启动；开发命令与构建版二选一。
+当前可试玩地址：**http://127.0.0.1:3001/**（当前本机进程使用用户配置的 DeepSeek + 北京 Qwen，回复默认有声；不加载配置时为 Mock）。已有进程运行时无需重复启动；开发命令与构建版二选一。
 
 实际验证环境：Node 24.11.1、npm 11.6.2。支持 Node 22.12+ 的 22 系列、24 系列或 26+，建议 Node 24。
 
@@ -37,8 +39,8 @@ npm start
 - 中性/戒备、好奇、释然三种眉眼与嘴部状态；固定身体基图，局部蒙版覆盖；模拟眨眼和说话状态嘴型。侧倾/前倾为 CSS 示意动作，照片事件单独呈现。
 - 谈到照片后，由当前回复触发照片事件及环境变暖。
 - 可取消 Mock；新输入与打断使旧响应、旧字幕、旧动作和待播放事件失效。
-- 浏览器朗读仅为可选预览；默认静音走可取消字幕演出，不保证每台机器都有中文声音。
-- 体验工具可模拟慢响应、超时、服务失败、朗读失败，并可重试。
+- Mock 使用浏览器朗读；真实语音配置可用时使用 Qwen。未解锁/播放失败走可取消字幕演出，不保证每台机器都有中文声音。
+- 产品页保留文字、麦克风和打断；故障注入保留在代码测试，正常错误仍显示重试入口，不展示开发控制面板。
 - 已替换为用户确认的 Mira AI 立绘。静音 Mock 的眨眼/嘴型是明确标注的模拟；真实模式按播放状态驱动开合，仍不是音素口型，尚未实测。
 
 已确认基图保存在 assets/candidates/mira-character-sample-v1.png，运行资源与四张原始差分在 public/characters/mira/。不修改原图，通过 CSS mask 只覆盖脸部、眼区、嘴区；详见 public/characters/mira/README.md。
@@ -55,7 +57,7 @@ npm start
 | 语音 | AudioWorklet + 16k PCM、Qwen realtime ASR/TTS、24k PCM 调度 | 显式启用；已限量合成转写，真人设备仍待验证 |
 | 验证 | Vitest 5、Fastify inject、静音浏览器检查 | 重点覆盖竞争、取消和恢复 |
 
-src/core/engine.ts 负责状态和演出编排；audio.ts 负责默认静音与播放生命周期；transport.ts 负责请求和取消。shared/protocol.ts 定义指令。server/app.ts 负责会话水位、超时和恢复；providers.ts 实现 Mock 与 DeepSeek；qwen.ts 实现服务端语音协议，speech-routes.ts 代理同源 WebSocket。microphone.ts / shared/pcm.ts 负责采集与重采样，voice-input.ts 处理按住说话生命周期，pcm-playback.ts 用音频时钟呈现句子。
+src/core/engine.ts 负责状态和演出编排；audio.ts / audio-lifecycle.ts 负责首次交互解锁与播放生命周期；transport.ts 负责请求和取消。shared/protocol.ts 定义指令。server/app.ts 负责会话水位、超时和恢复；providers.ts 实现 Mock 与 DeepSeek；qwen.ts 实现服务端语音协议，speech-routes.ts 代理同源 WebSocket。microphone.ts / shared/pcm.ts 负责采集与重采样，voice-input.ts 处理按住说话生命周期，pcm-playback.ts 用音频时钟呈现句子。
 
 ## 打断与字幕
 
@@ -81,7 +83,7 @@ emotion：guarded / curious / relieved；action：idle / look-window / offer-pho
 
 DeepSeek 请求已用假 fetch 验证：可配置 DEEPSEEK_MODEL（默认 deepseek-flash）、thinking.type=disabled、response_format=json_object。Qwen 实现 qwen3-asr-flash-realtime / qwen3-tts-flash-realtime，地域和官方端点由用户选择；服务端 WebSocket 持有密钥。浏览器采集经低通重采样为 16k PCM，TTS 使用 24k PCM，按播放时钟触发句子字幕和动作。
 
-**本地配置步骤、变量、地区和显式录音说明见 [docs/LIVE_SETUP.md](docs/LIVE_SETUP.md)。** .env 已被忽略；普通 npm start 不加载它，用户填写后需主动使用 npm run start:configured。真实服务可用时页面显示“启用麦克风”，声音仍关闭。用户已反馈前一轮能正常发声；AI 没有进行真人麦克风/听感验收，替身测试不能代替真实验证。
+**本地配置步骤、变量、地区和显式录音说明见 [docs/LIVE_SETUP.md](docs/LIVE_SETUP.md)。** .env 已被忽略；普通 npm start 不加载它，用户填写后需主动使用 npm run start:configured。真实服务可用时页面显示“启用麦克风”，后续回复默认有声。用户已反馈前一轮能正常发声；AI 没有进行真人麦克风/听感验收，替身测试不能代替真实验证。
 
 官方资料：
 - https://api-docs.deepseek.com/api/create-chat-completion/
@@ -94,9 +96,9 @@ DeepSeek 请求已用假 fetch 验证：可配置 DEEPSEEK_MODEL（默认 deepse
 ```sh
 npm run check
 ```
-执行类型检查、单元/API 测试和构建。最新 13 文件 144/144 测试通过；依赖审计此前为 0 项已知漏洞（2026-10-25），这两次修复未改依赖。自动测试用假音频、假网络，不出声、不访问第三方模型。
+执行类型检查、单元/API 测试和构建。最新 14 文件 158/158 测试通过；依赖审计此前为 0 项已知漏洞（2026-10-25），这两次修复未改依赖。自动测试用假音频、假网络，不出声、不访问第三方模型。
 
-仅在 Mock 配置下进行无费用回归：问“你在等谁？”→ 演出时打断 → 继续问照片 → 体验工具模拟超时并重试 → 选择慢响应后连续发送新问题。不要为测试点击开启声音。完整记录在 docs/ACCEPTANCE.md。
+自动回归使用假网络/假音频验证正常回复、连续打断、迟到响应、故障恢复、播放解锁与离页取消。UI 渲染检查确认已删除声音开关与体验面板；Mock 的无配置入口由状态控制器测试覆盖。用户可自行对话并打断；agent 不在真实页面发送测试问题、录音或播放。完整记录在 docs/ACCEPTANCE.md。
 
 ## 来源、限制与后续两周
 
@@ -104,7 +106,7 @@ npm run check
 
 已完成指定 DeepSeek/Qwen 账号三次限量连通验证。未完成：真实设备录音/音频听感验收、差分接缝与角色表演的用户验收、真实手机验收、3–5 分钟交付录屏。采集、重采样和实时适配代码已完成，假设备/假网络测试通过；真实服务已完成单句合成→重采样→识别，尚AI 未进行麦克风或播放验收；用户反馈前一轮能发声，仍不足以证明完整语音链路通过。Mock 剧情分支有限，不等价于真实模型自由对话。内存会话最多 100 个，30 分钟清理，刷新重开，无持久化。
 
-构建存在 Zod 上游注释 tree-shaking 警告，构建成功；浏览器检查没有 JavaScript 异常。静音是明确用户要求，实际出声测试须得到新的明确同意。
+构建存在 Zod 上游注释 tree-shaking 警告，构建成功；浏览器检查没有 JavaScript 异常。产品回复默认有声是用户最新决定；agent 实际出声测试仍须新的明确同意，不能由产品默认变化推导测试授权。
 
 时间：仓库创建于 2026-10-25 08:01 UTC，首轮验收约 08:14 UTC，静音与依赖修复后的最终检查约 08:26 UTC。约 25 分钟 agent 执行时间，不代表人工工时；人工投入待用户补充。截止为 2026-10-28 07:32 UTC（北京时间 15:32）。
 
@@ -137,3 +139,7 @@ npm run check
 模型回复先检查结束状态，再本地整理完整 JSON 包装/围栏并校验指令。可用对白的演出指令不合规时仅保留原对白并明确提示；达到长度上限、空内容或损坏 JSON 不假装成功。手动“重新请求（会计费）”才发送新请求。诊断仅保存枚举/数字至被忽略的 .local/last-reply-diagnostic.json，不含提示词、对白、密钥或原始错误。
 
 两项用户反馈、根因确定性、修复与验证缺口见 [ISSUES_AND_FIXES](docs/ISSUES_AND_FIXES.md)。原 PDF 第 5 页要求的 AI 工具、参与工作、人工验证和纠错例子在 [AI_USAGE](AI_USAGE.md) 正文逐项说明；自动化结果不冒充人工验收。
+
+## 浏览器播放限制
+
+首次可信 pointerdown / click / keydown 在交互栈内准备 AudioContext；不会创建欢迎音频或调用 TTS。resume 等待最多 1.5 秒，受限时显示提示并保留字幕，下一次用户交互可以重新解锁。健康检查晚到不会抹掉已解锁状态；关闭页面时迟到的解锁结果失效。真实浏览器/设备的播放效果尚待用户验证，假 AudioContext 通过不等于真人听感通过。依据：[MDN autoplay](https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Autoplay)、[AudioContext.resume](https://developer.mozilla.org/en-US/docs/Web/API/AudioContext/resume)。

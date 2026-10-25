@@ -40,7 +40,7 @@ describe('playback-clock scheduling', () => {
     abort.abort();await expect(q.done).rejects.toMatchObject({name:'AbortError'});expect(nodes.every(n=>n.stop.mock.calls.length===1)).toBe(true);
     setTime(20);nodes.forEach(n=>n.ended());await vi.advanceTimersByTimeAsync(100);q.enqueue(new Uint8Array(4800));expect(nodes).toHaveLength(2);expect(start).not.toHaveBeenCalled();
   });
-  it('does not create audio hardware or a socket when muted, including Qwen mode', async () => {
+  it('does not create audio hardware or a socket before a user gesture, including Qwen mode', async () => {
     const context=vi.fn(()=>{throw new Error('hardware used');}),socket=vi.fn(()=>{throw new Error('network used');});
     vi.stubGlobal('AudioContext',context);vi.stubGlobal('WebSocket',socket);
     const audio=new SceneAudio();audio.live=true;

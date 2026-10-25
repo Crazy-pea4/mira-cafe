@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { SceneAudio } from './core/scene-audio';
+import { bindAudioLifecycle } from './core/audio-lifecycle';
 import { VoiceInput } from './core/voice-input';
 import { VoiceEntry } from './core/voice-entry';
 import { prepareMicrophone } from './core/microphone';
@@ -7,7 +8,6 @@ import { voiceButtonView } from './VoiceButton';
 import { LocalSpeechTransport } from './core/speech-transport';
 import { ConversationEngine } from './core/engine';
 import { HttpTransport } from './core/transport';
-import type { Fault } from '../shared/protocol';
 import { Character } from './Character';
 import { SCENE_ARTWORK } from './scene-artwork';
 import { UserMessage, type InputSource } from './UserMessage';
@@ -18,38 +18,29 @@ export function App() {
     const audio = new SceneAudio(), voice = new VoiceInput(new LocalSpeechTransport());
     return { engine: new ConversationEngine(new HttpTransport(), audio), audio, entry: new VoiceEntry(voice, prepareMicrophone) };
   });
-  const state = useSyncExternalStore(engine.subscribe, engine.getSnapshot);
-  const input = useSyncExternalStore(entry.subscribe, entry.getSnapshot);
+  const state = useSyncExternalStore(engine.subscribe, engine.getSnapshot, engine.getSnapshot);
+  const input = useSyncExternalStore(entry.subscribe, entry.getSnapshot, entry.getSnapshot);
   const voiceButton = voiceButtonView(input);
   const [text, setText] = useState('');
   const [inputSource, setInputSource] = useState<InputSource>('text');
   const [backgroundReady, setBackgroundReady] = useState(false);
-  const [muted, setMuted] = useState(true);
-  const [tools, setTools] = useState(false);
-  const [fault, setFault] = useState<Fault>('none');
+  const [audioNotice, setAudioNotice] = useState('');
   const [provider, setProvider] = useState('mock');
-  const [budget, setBudget] = useState<{capCny:number;reservedCny:number;totalRequests:number;maxRequests:number;reason:string} | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     void fetch('/api/health', { signal: controller.signal }).then(r => { if (!r.ok) throw new Error('Unavailable'); return r.json(); }).then(d => {
-      setProvider(d.provider); setBudget(d.budget ?? null);
+      setProvider(d.provider);
       entry.configure(d.speechAvailable === true, d.speech === 'qwen', d.budget?.reason);
-      if (audio.live !== !!d.speechAvailable) { audio.disable(); setMuted(true); }
       audio.live = !!d.speechAvailable;
     }).catch(() => { if (!controller.signal.aborted) entry.unavailable(); });
+    const unbindAudio = bindAudioLifecycle(window, document, audio, () => { entry.cancel(); engine.interrupt(); }, setAudioNotice);
     const blur = () => entry.blur();
     window.addEventListener('blur', blur);
-    return () => { controller.abort(); entry.cancel(); audio.disable(); engine.dispose(); window.removeEventListener('blur', blur); };
+    return () => { controller.abort(); unbindAudio(); engine.dispose(); window.removeEventListener('blur', blur); };
   }, [engine, entry, audio]);
-  useEffect(() => {
-    if (!tools) return;
-    const controller = new AbortController();
-    void fetch('/api/health', { signal: controller.signal }).then(r => r.json()).then(d => setBudget(d.budget ?? null)).catch(() => {});
-    return () => controller.abort();
-  }, [tools, state.status]);
   const send = (value: string, source: InputSource = 'text') => {
     if (!value.trim() || value.trim().length > 800) return;
-    setInputSource(source); entry.cancel(); setText(''); const nextFault = fault; setFault('none'); void engine.submit(value, nextFault);
+    setInputSource(source); entry.cancel(); setText(''); void engine.submit(value);
   };
   const hold = () => entry.press({
     begin: () => { engine.interrupt(true); return engine.getSnapshot().turnId; },
@@ -58,19 +49,12 @@ export function App() {
     notice: message => engine.inputNotice(message),
     end: () => engine.endListening(),
   });
-  const toggleSound = async () => {
-    entry.cancel(); engine.interrupt();
-    if (!muted) { audio.disable(); setMuted(true); return; }
-    try { await audio.enable(); setMuted(false); }
-    catch { audio.disable(); setMuted(true); engine.inputNotice('浏览器尚未允许声音，仍保持静音。'); }
-  };
   const active = state.status === 'speaking' || state.status === 'thinking';
   return <main className={`app scene-${state.scene}`}>
     <div className="ambient-grain"/>
     <header className="topbar">
       <a className="brand" href="/" aria-label="Mira Café 首页"><span className="brand-icon">☾</span><span>MIRA <b>CAFÉ</b></span></a>
       <div className="top-actions"><span className="mode-chip"><i/>{provider === 'deepseek' ? 'DeepSeek 文字' : 'MOCK 体验'}</span>
-        <button className="icon-button sound-button" aria-pressed={!muted} aria-label={muted ? '开启声音（将播放角色语音）' : '关闭声音并停止当前播放'} onClick={() => void toggleSound()}>{muted ? '声音关闭' : '声音开启'}</button>
       </div>
     </header>
     <section className={'stage ' + (backgroundReady ? 'illustrated-stage' : '')} aria-label="夜雨咖啡馆互动场景">
@@ -94,6 +78,7 @@ export function App() {
           {active && <button className="interrupt" onClick={() => engine.interrupt()} aria-label="立即打断当前回复">■ 打断</button>}
         </div>
         {state.notice && <div className="notice" role="status">{state.notice}</div>}
+        {audioNotice && audioNotice !== state.notice && <div className="notice" role="status">{audioNotice}</div>}
       </div>
     </section>
     <section className="interaction" aria-label="与 Mira 对话">
@@ -114,16 +99,7 @@ export function App() {
         </button>
       </form>
       <p className="voice-help" role="status" data-testid="voice-help">{input.message}</p>
-      <div className="interaction-footer"><span>默认静音 <i>·</i> {input.mode === 'live' ? '按住录音 → 松开识别；文字显示为你的消息并发送' : '模拟语音不会录音；开启声音需主动点击'}</span><button onClick={() => setTools(!tools)} aria-expanded={tools}>体验工具 {tools ? '−' : '+'}</button></div>
-      {tools && <div className="demo-tools">
-        <label>输入模式<select aria-label="输入模式" value={input.mode} onChange={event => { entry.select(event.target.value as 'mock' | 'live'); engine.interrupt(); }}><option value="live" disabled={!input.available}>{input.available ? '真实麦克风 → Qwen' : '真实麦克风（暂不可用）'}</option><option value="mock">模拟台词（不识别讲话）</option></select></label>
-        <label>下一轮演示<select aria-label="下一轮演示" value={fault} onChange={event => setFault(event.target.value as Fault)}><option value="none">正常回复</option><option value="slow">延迟回复（可打断）</option><option value="timeout">模拟超时</option><option value="error">模拟服务失败</option></select></label>
-        <button onClick={() => { audio.failNext = true; send('能看看你的照片吗？'); }}>演示朗读失败</button>
-        <button onClick={() => { entry.cancel(); engine.reset(); }}>重新相遇 ↻</button>
-        <span>场景随对话推进 · 已完成 {state.completed} 轮</span>
-        {budget && <div className="budget-status" data-testid="budget">测试合计预算 ¥{budget.capCny} · 本地预留 ¥{budget.reservedCny.toFixed(2)} · 请求 {budget.totalRequests}/{budget.maxRequests}
-          <small>预留不等于实际账单。{budget.reason || '接近上限会停止新请求；失败与取消不返还预留。'}</small></div>}
-      </div>}
+      <div className="interaction-footer"><span>回复默认有声 <i>·</i> {input.mode === 'live' ? '按住录音 → 松开识别；文字显示为你的消息并发送' : '模拟台词不会录音；打断可停止回复'}</span></div>
     </section>
     <footer className="page-footer"><span>A LITTLE RAIN. A LITTLE COMPANY.</span><span>本地开发预览 / PHASE 02</span></footer>
   </main>;
