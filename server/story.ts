@@ -133,6 +133,12 @@ function safeSuggestions(values:unknown,state:StoryState):string[]|undefined{
 export type PendingStory={turnId:number;input:string;reply:Reply;proposal:StoryProposal;units:PresentationUnit[];through:number;heard:Reply['segments'];historyEntry?:History[number];suggestions?:string[]};
 export function prepareStory(state:StoryState,request:TurnRequest,reply:Reply):PendingStory{
  const proposal=proposalFor(reply,request.text);
+ // The authored C route closes an explicit opt-out after the commission is known.
+ // Do not make an early stranger's refusal disclose future background, or leave a
+ // player who has opted out responsible for repeatedly asking Mira to decide.
+ if(!state.ending&&state.facts.includes('commission')&&proposal.intent==='decline'&&!reply.segments.some(s=>s.beat?.startsWith('ending-'))){
+  reply={segments:[{text:'那我自己决定：这次先婉拒委托。虽然有点遗憾，但白天我们可以先练习拍照，再慢慢来。',emotion:'relieved',action:'idle',beat:'ending-c'}],story:proposal};
+ }
  // External events belong to the local director. A model may omit optional beat fields;
  // advance only from acknowledged prerequisites and a relevant player response, never a timer.
  if(!reply.segments.some(s=>s.beat)&&!state.ending&&!['decline','clarify','reframe'].includes(proposal.intent)){

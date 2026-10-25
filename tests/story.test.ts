@@ -97,6 +97,25 @@ describe('Before the Rain Stops: authoritative presented facts and free conversa
   reach(s,'commission');const end=advance(s,'今晚不想参与，你自己决定吧。');expect(s.ending).toBe('c');expect(end.reply.segments[0].text).toContain('我想过了');expect(end.reply.segments[0].text).toContain('白天');
   advance(s,'谢谢，我们聊聊咖啡。');expect(s.ending).toBe('c');expect(s.facts).toContain('commission');
  });
+ it('closes an explicit opt-out with authored C after a known commission when a valid model reply only hesitates',()=>{
+  const s=reach(newStory(),'commission');
+  const hesitation:Reply={segments:[{text:'其实我也一直在犹豫。',emotion:'guarded',action:'idle'}],story:{intent:'decline'},suggestions:['那就只喝咖啡吧。','我们聊聊雨吧。','如果你想好了，可以告诉我。']};
+  const p=prepareStory(s,request(9,'我不想再出主意，你自己决定吧。'),hesitation);
+  expect(p.reply.segments[0].beat).toBe('ending-c');expect(p.reply.segments[0].cue?.kind).toBe('reply-sent');
+  expect(storyViolation(storyContext(s),p.reply,'我不想再出主意，你自己决定吧。')).toEqual([]);
+  const send=p.units.findIndex(u=>u.kind==='cue'&&u.cue.kind==='reply-sent');
+  acknowledgeStory(s,p,send);expect(s.ending).toBeNull();expect(s.cues['reply-sent']).toBeUndefined();
+  acknowledgeStory(s,p,send+1);expect(s.ending).toBe('c');
+  const ack=acknowledgeStory(s,p,p.units.length)!;expect(ack.suggestions).toEqual(contextualSuggestions(s));
+  expect(s.cues['reply-sent']?.message).toContain('决定先不接受');
+ });
+ it('does not force authored C for an early opt-out, ordinary advice or an already completed ending',()=>{
+  const r:Reply={segments:[{text:'其实我也一直在犹豫。',emotion:'guarded',action:'idle'}],story:{intent:'decline'}};
+  const early=prepareStory(newStory(),request(1,'我不想参与。'),r);expect(early.reply.segments[0].beat).toBeUndefined();
+  const s=reach(newStory(),'commission');
+  const advice=prepareStory(s,request(2,'你可以先视频聊聊。'),{...r,story:{intent:'alternative'}});expect(advice.reply.segments[0].beat).toBeUndefined();
+  s.ending='a';s.act='ending';expect(prepareStory(s,request(3,'你自己决定。'),r).reply.segments[0].beat).toBeUndefined();
+ });
  it('clarifies ambiguous short answers without forcing progress',()=>{
   const s=newStory();advance(s,'随便');expect(s.facts).toEqual([]);expect(s.history[1].content).toContain('clarify');
  });
