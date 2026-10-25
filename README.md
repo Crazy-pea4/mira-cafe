@@ -6,7 +6,7 @@
 
 ## 启动
 
-当前可试玩地址：**http://127.0.0.1:3001/**（构建版，默认 Mock / 静音）。已有进程运行时无需重复启动；开发命令与构建版二选一。
+当前可试玩地址：**http://127.0.0.1:3001/**（当前本机进程使用用户配置的 DeepSeek + 北京 Qwen，默认静音；不加载配置时为 Mock）。已有进程运行时无需重复启动；开发命令与构建版二选一。
 
 实际验证环境：Node 24.11.1、npm 11.6.2。支持 Node 22.12+ 的 22 系列、24 系列或 26+，建议 Node 24。
 
@@ -28,7 +28,7 @@ npm ci --ignore-scripts && npm run dev
 npm run build
 npm start
 ```
-打开 http://127.0.0.1:3001 。先停止开发进程，避免 API 端口冲突。未创建远程仓库，未 push、未部署。
+打开 http://127.0.0.1:3001 。先停止开发进程，避免 API 端口冲突。远程托管仅使用用户授权的私有仓库；本项目没有公开部署。
 
 ## 已实现范围
 
@@ -52,7 +52,7 @@ npm start
 | 协议 | 共享 TypeScript + Zod 4 | 前后端校验，只执行枚举内动作 |
 | 角色 | 已确认 PNG 基图 + 局部 CSS mask 差分 | 固定衣服/身体，避免生成漂移闪烁 |
 | 文字 | Mock / DeepSeek provider | 默认 Mock，真实适配器可取消 |
-| 语音 | AudioWorklet + 16k PCM、Qwen realtime ASR/TTS、24k PCM 调度 | 显式启用；当前只验证假设备与假协议 |
+| 语音 | AudioWorklet + 16k PCM、Qwen realtime ASR/TTS、24k PCM 调度 | 显式启用；已限量合成转写，真人设备仍待验证 |
 | 验证 | Vitest 5、Fastify inject、静音浏览器检查 | 重点覆盖竞争、取消和恢复 |
 
 src/core/engine.ts 负责状态和演出编排；audio.ts 负责默认静音与播放生命周期；transport.ts 负责请求和取消。shared/protocol.ts 定义指令。server/app.ts 负责会话水位、超时和恢复；providers.ts 实现 Mock 与 DeepSeek；qwen.ts 实现服务端语音协议，speech-routes.ts 代理同源 WebSocket。microphone.ts / shared/pcm.ts 负责采集与重采样，voice-input.ts 处理按住说话生命周期，pcm-playback.ts 用音频时钟呈现句子。
@@ -65,7 +65,7 @@ src/core/engine.ts 负责状态和演出编排；audio.ts 负责默认静音与�
 
 短回复完整通过 Zod 校验后分句播放。在音频 onstart 时才显示对应句子并触发该段动作；静音或朗读失败时使用可取消字幕时间线。字幕当前按句推进，没有精确逐字时间戳；降级按文字长度估时。只把完整呈现的助手句子写入后续历史。已经展示的照片可保留，未展示的事件被打断后不再出现。
 
-按住模拟语音立即进入倾听，松开提交预设台词。真实 ASR 代码采用按住说话/松开提交，需显式切换输入模式和本机配置；暂不做自动 VAD。
+按住模拟语音立即进入倾听，松开提交预设台词。真实 ASR 代码采用按住说话/松开提交，本机真实服务可用时自动选择真实入口，先准备权限再按住；暂不做自动 VAD。
 
 ## 结构化指令
 
@@ -73,7 +73,7 @@ src/core/engine.ts 负责状态和演出编排；audio.ts 负责默认静音与�
 {"segments":[{"text":"这张照片，是我今晚等待的原因。","emotion":"curious","action":"offer-photo","event":"reveal-photo"}]}
 ```
 
-emotion：guarded / curious / relieved；action：idle / look-window / offer-photo；可选 scene：rain / warm；可选 event：reveal-photo。每次 1–3 段，每段最多 180 字。未知字段、未知动作拒绝。只将 text 分句交给语音层，不朗读 JSON，不执行外部媒体 URL 或任意代码。
+emotion：guarded / curious / relieved；action：idle / look-window / offer-photo；可选 scene：rain / warm；可选 event：reveal-photo。每次 1–3 段，每段最多 180 字。未知动作不执行；模型返回的额外字段剔除，有对白但指令不合规时明确降级为仅对白。截断、空内容或损坏 JSON 明确失败，无自动收费重试。只将 text 分句交给语音层，不朗读 JSON，不执行外部媒体 URL 或任意代码。
 
 ## 真实服务与凭据
 
@@ -81,7 +81,7 @@ emotion：guarded / curious / relieved；action：idle / look-window / offer-pho
 
 DeepSeek 请求已用假 fetch 验证：可配置 DEEPSEEK_MODEL（默认 deepseek-flash）、thinking.type=disabled、response_format=json_object。Qwen 实现 qwen3-asr-flash-realtime / qwen3-tts-flash-realtime，地域和官方端点由用户选择；服务端 WebSocket 持有密钥。浏览器采集经低通重采样为 16k PCM，TTS 使用 24k PCM，按播放时钟触发句子字幕和动作。
 
-**本地配置步骤、变量、地区和显式录音说明见 [docs/LIVE_SETUP.md](docs/LIVE_SETUP.md)。** .env 已被忽略；普通 npm start 不加载它，用户填写后需主动使用 npm run start:configured。页面默认仍是模拟输入与关闭声音。没有真实麦克风权限、录音、出声或云服务验收；替身测试不能代替真实验证。
+**本地配置步骤、变量、地区和显式录音说明见 [docs/LIVE_SETUP.md](docs/LIVE_SETUP.md)。** .env 已被忽略；普通 npm start 不加载它，用户填写后需主动使用 npm run start:configured。真实服务可用时页面显示“启用麦克风”，声音仍关闭。用户已反馈前一轮能正常发声；AI 没有进行真人麦克风/听感验收，替身测试不能代替真实验证。
 
 官方资料：
 - https://api-docs.deepseek.com/api/create-chat-completion/
@@ -94,15 +94,15 @@ DeepSeek 请求已用假 fetch 验证：可配置 DEEPSEEK_MODEL（默认 deepse
 ```sh
 npm run check
 ```
-执行类型检查、单元/API 测试和构建。75/75 测试通过；全部依赖 npm audit 为 0 项已知漏洞（2026-10-25）。自动测试用假音频、假网络，不出声、不访问第三方模型。
+执行类型检查、单元/API 测试和构建。最新 13 文件 144/144 测试通过；依赖审计此前为 0 项已知漏洞（2026-10-25），这两次修复未改依赖。自动测试用假音频、假网络，不出声、不访问第三方模型。
 
-静音试玩：问“你在等谁？”→ 演出时打断 → 继续问照片 → 体验工具模拟超时并重试 → 选择慢响应后连续发送新问题。不要为测试点击开启声音。完整记录在 docs/ACCEPTANCE.md。
+仅在 Mock 配置下进行无费用回归：问“你在等谁？”→ 演出时打断 → 继续问照片 → 体验工具模拟超时并重试 → 选择慢响应后连续发送新问题。不要为测试点击开启声音。完整记录在 docs/ACCEPTANCE.md。
 
 ## 来源、限制与后续两周
 
 场景、照片示意和第一阶段人物占位层由本项目 SVG/CSS 绘制，没有下载外部字体或照片。角色及局部差分来自用户任务中的 AI 生成资产，已获用户采用确认，身份和现状单独记录。开源依赖见锁文件。
 
-已完成指定 DeepSeek/Qwen 账号三次限量连通验证。未完成：真实设备录音/音频听感验收、差分接缝与角色表演的用户验收、真实手机验收、3–5 分钟交付录屏。采集、重采样和实时适配代码已完成，假设备/假网络测试通过；真实服务已完成单句合成→重采样→识别，尚未进行麦克风或播放测试。Mock 剧情分支有限，不等价于真实模型自由对话。内存会话最多 100 个，30 分钟清理，刷新重开，无持久化。
+已完成指定 DeepSeek/Qwen 账号三次限量连通验证。未完成：真实设备录音/音频听感验收、差分接缝与角色表演的用户验收、真实手机验收、3–5 分钟交付录屏。采集、重采样和实时适配代码已完成，假设备/假网络测试通过；真实服务已完成单句合成→重采样→识别，尚AI 未进行麦克风或播放验收；用户反馈前一轮能发声，仍不足以证明完整语音链路通过。Mock 剧情分支有限，不等价于真实模型自由对话。内存会话最多 100 个，30 分钟清理，刷新重开，无持久化。
 
 构建存在 Zod 上游注释 tree-shaking 警告，构建成功；浏览器检查没有 JavaScript 异常。静音是明确用户要求，实际出声测试须得到新的明确同意。
 
@@ -131,3 +131,9 @@ npm run check
 ## 真实语音入口修复
 
 已配置Qwen时，页面自动进入真实语音入口。首次点击“启用麦克风”并允许，随后按住“按住说话”，看到录音提示后讲话、松开识别；不再需要进入体验工具选择真实模式。“模拟台词”明确不识别讲话。权限弹窗与按住采集分开，慢连接下松手不会丢弃有效音频。101项假设备测试、类型检查及构建通过；本轮未录音、出声或新增付费调用。详见 [修复验收](docs/VOICE_INPUT_FIX.md)。
+
+## 回复格式恢复与排障
+
+模型回复先检查结束状态，再本地整理完整 JSON 包装/围栏并校验指令。可用对白的演出指令不合规时仅保留原对白并明确提示；达到长度上限、空内容或损坏 JSON 不假装成功。手动“重新请求（会计费）”才发送新请求。诊断仅保存枚举/数字至被忽略的 .local/last-reply-diagnostic.json，不含提示词、对白、密钥或原始错误。
+
+两项用户反馈、根因确定性、修复与验证缺口见 [ISSUES_AND_FIXES](docs/ISSUES_AND_FIXES.md)。原 PDF 第 5 页要求的 AI 工具、参与工作、人工验证和纠错例子在 [AI_USAGE](AI_USAGE.md) 正文逐项说明；自动化结果不冒充人工验收。

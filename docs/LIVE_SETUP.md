@@ -44,13 +44,13 @@
 
 浏览器 AudioWorklet 输出实际设备采样率 Float32；经带低通的流式重采样转为 16kHz、单声道、16bit little-endian PCM，再通过同源 WebSocket 到本地后端。未使用 MediaRecorder WebM 冒充 PCM。后端持有 Authorization，代理到 Qwen；仅允许本机同源 WebSocket 升级，不记录录音、转写或密钥。
 
-DeepSeek 完整 JSON 经 Zod 校验后只提取 text，按中文句子逐次合成，原始 JSON 不进入 TTS。Qwen 返回 24kHz PCM，由 AudioContext 时钟连续排队。每句实际到达音频播放时钟时才呈现字幕和动作，结束后开始下一句；没有逐字/音素时间戳，嘴型仍是占位动画。静音/失败则降级为明确提示的可取消字幕演出。
+DeepSeek 检查结束状态、整理完整已知包装并经 Zod 校验后只提取 text，按中文句子逐次合成，原始 JSON 不进入 TTS。Qwen 返回 24kHz PCM，由 AudioContext 时钟连续排队。每句实际到达音频播放时钟时才呈现字幕和动作，结束后开始下一句；没有逐字/音素时间戳，嘴型仍是占位动画。静音/失败则降级为明确提示的可取消字幕演出。
 
 取消同时关闭代理、丢弃迟到 PCM、停止已排期节点并失效字幕/动作回调。断线不自动收费重试；录音重新按住，文字失败用重试按钮，TTS 失败保留字幕。原始上游错误不直接展示或打印。无数据库、无录音持久化。
 
 ## 真实验证仍待完成
 
-已确认北京与合计 10 元预算。仍需用户自行配置有效凭据/工作空间、核对账号用量与音色，并明确同意真实录音/出声测试。随后才可验证：真实设备权限与采样率、PCM 链路、Qwen 实际事件顺序、模型可用性、真人听感、句子字幕对齐、连续打断、弱网重连和延迟/成本。本阶段 75 项自动化是替身验证，不代表真实云服务或真人听感通过。
+已确认北京与合计 10 元预算。用户已自行配置凭据并完成三次限量连通，后续自动付费测试已停止。用户可自行继续验证；AI 仍不得未经新授权录音、出声或付费重试。尚待真实设备验证：真实设备权限与采样率、PCM 链路、Qwen 实际事件顺序、模型可用性、真人听感、句子字幕对齐、连续打断、弱网重连和延迟/成本。当前 144 项自动化使用替身，不代表真人麦克风、听感或本次格式修复已获人工验收。
 
 官方依据：
 - [DeepSeek chat completion](https://api-docs.deepseek.com/api/create-chat-completion/)
@@ -70,10 +70,14 @@ DeepSeek 完整 JSON 经 Zod 校验后只提取 text，按中文句子逐次合�
 
 请求发送前写入被 Git 忽略的 .local/budget.json；跨进程写锁防止漏计。取消、超时、失败不退预留，重启不清零。记录损坏、写入失败、遗留锁均拒绝收费请求，不自动删锁或重置。不要为继续调用删除账本；须先停本项目进程、核对账单再处理。
 
-体验工具显示次数与预留，不显示虚假的实际消费；actualBilledCny 始终为 null。日志仅允许 started/start_failed、mock/deepseek 和端口，不输出 Error.message、完整请求/响应、Authorization、Key、工作空间配置、录音或对话。上游错误转换为固定安全提示。
+体验工具显示次数与预留，不显示虚假的实际消费；actualBilledCny 始终为 null。启动日志仅允许 started/start_failed、mock/deepseek 和端口，不输出 Error.message、完整请求/响应、Authorization、Key、工作空间配置、录音或对话。上游错误转换为固定安全提示。
 
 价格来源：[DeepSeek 人民币价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)、[百炼模型价格](https://help.aliyun.com/zh/model-studio/model-pricing)。北京端点来源见上方 ASR/TTS 交互文档；ASR 官方推荐工作空间域名，TTS 当前官方示例仍列北京兼容域名。
 
 预置音色依据：2026-10-25 核对 [Qwen 官方音色表](https://help.aliyun.com/zh/model-studio/qwen-tts-voice-list)，实时 qwen3-tts-flash-realtime 列出千雪 Chelsie。最初核对文档与假网络参数；后续经授权完成一次未播放的真实 Chelsie 合成，见 LIVE_SMOKE.md。优先验证讲话转文字时可以保持声音关闭，且 MIRA_PROVIDER=mock，从而只测试 ASR；真实 ASR 仍需要两项收费开关和录音授权。
 
 最新入口修复与假设备回归详见 [VOICE_INPUT_FIX](VOICE_INPUT_FIX.md)；真实服务可用时不再默认模拟入口。
+
+## 回复格式异常的本地诊断
+
+先检查 finish_reason，截断/过滤/异常结束不会播放。完整已知包装可本地整理，未知演出指令会被移除并显示降级提示；无有效对白仍明确失败。不会为修复格式自动发第二个收费请求。唯一额外诊断是 .local/last-reply-diagnostic.json（被 Git 忽略），仅保留白名单枚举、长度/段数和数字 token 用量，不记录原始响应、提示词、转写、凭据或会话标识。旧错误未保留原响应，不能确认当次具体根因。详见 [ISSUES_AND_FIXES](ISSUES_AND_FIXES.md)。

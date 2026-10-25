@@ -1,5 +1,5 @@
 import type { Action, CharacterStatus, Emotion, Fault, History, Scene } from '../../shared/protocol';
-import { turnResponseSchema } from '../../shared/protocol';
+import { turnResponseSchema, REPLY_TEXT_ONLY_NOTICE } from '../../shared/protocol';
 import { delay, isAbort } from '../../shared/async';
 import type { AudioPlayer } from './audio';
 import type { Transport } from './transport';
@@ -40,8 +40,10 @@ export class ConversationEngine {
       const parsed = turnResponseSchema.safeParse(await this.transport.turn({ sessionId: this.sessionId, turnId, text: trimmed, history: priorHistory, fault }, signal));
       if (!parsed.success) throw new Error('角色回复格式异常，请重试。');
       const response = parsed.data;
+      const replyNotice = response.notice === 'REPLY_TEXT_ONLY' ? REPLY_TEXT_ONLY_NOTICE : '';
       if (!current()) return;
       if (response.turnId !== turnId) throw new Error('收到不匹配的回复，请重试。');
+      this.update({ notice: replyNotice });
       for (const segment of response.segments) {
         const sentences = segment.text.match(/[^。！？!?]+[。！？!?]?/g) ?? [segment.text];
         for (let index = 0; index < sentences.length; index++) {
@@ -59,7 +61,7 @@ export class ConversationEngine {
           catch (error) {
             if (!current() || isAbort(error)) return;
             present('simulated');
-            this.update({ notice: '当前使用字幕演出（声音已关闭或语音暂时不可用）。' });
+            this.update({ notice: [replyNotice, '当前使用字幕演出（声音已关闭或语音暂时不可用）。'].filter(Boolean).join(' ') });
             await delay(this.fallbackMs(sentence), signal);
           }
           if (!current()) return;
