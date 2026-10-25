@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { parseEnv } from 'node:util';
 import WebSocket from 'ws';
 import { resolveConfig } from '../server/config';
-import { BudgetGuard, FileBudgetStore } from '../server/budget';
+import { BudgetGuard, FileBudgetStore } from './legacy-test-budget';
 import { QwenSpeechProvider } from '../server/qwen';
 import { SpeechError, type WireFactory } from '../server/speech';
 import { Pcm16Resampler, decodePcm16 } from '../shared/pcm';
