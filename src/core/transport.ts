@@ -1,3 +1,4 @@
+import { appPath } from './app-path';
 import { turnResponseSchema, type TurnRequest, type TurnResponse } from '../../shared/protocol';
 import { presentationResponseSchema, type Presentation, type PresentationResponse } from '../../shared/story';
 import { abortError } from '../../shared/async';
@@ -16,7 +17,7 @@ export class HttpTransport implements Transport {
     return this.enqueue(async()=>{
       const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),3000);
       try{
-        const response=await fetch('/api/presented',{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify(receipt),keepalive:true});
+        const response=await fetch(appPath('api/presented'),{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify(receipt),keepalive:true});
         const parsed=presentationResponseSchema.safeParse(await response.json());
         if(!response.ok||!parsed.success||parsed.data.turnId!==receipt.turnId||parsed.data.through!==receipt.through)throw new Error('sync');
         return parsed.data;
@@ -35,7 +36,7 @@ export class HttpTransport implements Transport {
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 21000);
     try {
-      const response = await fetch('/api/turn', { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) });
+      const response = await fetch(appPath('api/turn'), { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error?.message ?? '连接失败，请重试。');
       const parsed = turnResponseSchema.safeParse(data);
@@ -53,7 +54,7 @@ export class HttpTransport implements Transport {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3000);
     try {
-      await fetch('/api/cancel', { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, throughTurnId }), keepalive: true });
+      await fetch(appPath('api/cancel'), { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, throughTurnId }), keepalive: true });
     } catch { /* Local invalidation is authoritative even if cancellation cannot reach the server. */ }
     finally { clearTimeout(timer); }
     });

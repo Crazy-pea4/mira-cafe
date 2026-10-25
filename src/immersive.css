@@ -128,3 +128,5 @@ html, body, #root { width:100%; height:100%; overflow:hidden; }
   .scene-props .photo-table { height:80px; }
   .scene-props .story-phone { padding:7px; }
 }
+
+.leave-cafe{padding:8px 12px;background:#17131c66;border:1px solid #e6caaa50;border-radius:20px;color:#eee1ce;font-size:11px;backdrop-filter:blur(5px)}

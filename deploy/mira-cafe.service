@@ -1,0 +1,26 @@
+# Review before installation; this repository does not install/start the service.
+[Unit]
+Description=Mira Cafe
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mira-cafe
+Group=mira-cafe
+WorkingDirectory=/opt/mira-cafe/current
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/mira-cafe.env
+ExecStart=/usr/local/bin/node /opt/mira-cafe/current/build/server/index.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/mira-cafe
+
+[Install]
+WantedBy=multi-user.target

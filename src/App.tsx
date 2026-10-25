@@ -1,3 +1,4 @@
+import { appPath } from './core/app-path';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { bindSceneViewport } from './core/scene-viewport';
 import { SceneAudio } from './core/scene-audio';
@@ -44,11 +45,12 @@ export function App() {
   const [inputSource, setInputSource] = useState<InputSource>('text');
   const [backgroundReady, setBackgroundReady] = useState(false);
   const [audioNotice, setAudioNotice] = useState('');
+  const [authentication, setAuthentication] = useState(false);
   const [provider, setProvider] = useState<string | null>(null);
   useEffect(() => {
     const controller = new AbortController();
-    void fetch('/api/health', { signal: controller.signal }).then(r => { if (!r.ok) throw new Error('Unavailable'); return r.json(); }).then(d => {
-      setProvider(d.provider);
+    void fetch(appPath('api/health'), { signal: controller.signal }).then(r => { if (!r.ok) throw new Error('Unavailable'); return r.json(); }).then(d => {
+      setProvider(d.provider); setAuthentication(d.authentication?.required === true);
       entry.configure(d.speechAvailable === true, d.speech === 'qwen');
       audio.live = !!d.speechAvailable;
     }).catch(() => { if (!controller.signal.aborted) entry.unavailable(); });
@@ -72,8 +74,8 @@ export function App() {
   return <main ref={sceneRef} className={`app scene-${state.scene}`}>
     <div className="ambient-grain"/>
     <header className="topbar">
-      <a className="brand" href="/" aria-label="Mira Café 首页"><span className="brand-icon">☾</span><span>MIRA <b>CAFÉ</b></span></a>
-      <div className="top-actions"><ModeBadge provider={provider}/></div>
+      <a className="brand" href={appPath()} aria-label="Mira Café 首页"><span className="brand-icon">☾</span><span>MIRA <b>CAFÉ</b></span></a>
+      <div className="top-actions"><ModeBadge provider={provider}/>{authentication && <form action={appPath('auth/logout')} method="post" onSubmit={()=>{entry.cancel();engine.suspend();audio.dispose();}}><button className="leave-cafe" type="submit">离开咖啡馆</button></form>}</div>
     </header>
     <section className={'stage ' + (backgroundReady ? 'illustrated-stage' : '')} aria-label="夜雨咖啡馆互动场景">
       <img className="scene-illustration" src={SCENE_ARTWORK.src} alt={SCENE_ARTWORK.description}

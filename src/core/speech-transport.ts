@@ -1,3 +1,4 @@
+import { appPath } from './app-path';
 import { speechServerSchema, bytesToBase64, base64ToBytes, type SpeechClientEvent, type SpeechServerEvent } from '../../shared/speech-protocol';
 import { abortError } from '../../shared/async';
 import { normalizeTranscript } from '../../shared/transcript';
@@ -19,7 +20,7 @@ export interface SpeechTransport {
   synthesize(text: string, turnId: number, signal: AbortSignal, chunk: (pcm: Uint8Array) => void): Promise<void>;
 }
 export class LocalSpeechTransport implements SpeechTransport {
-  constructor(private factory: BrowserWireFactory = nativeFactory, private endpoint = () => (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/speech') {}
+  constructor(private factory: BrowserWireFactory = nativeFactory, private endpoint = () => (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + appPath('api/speech')) {}
   private connect(turnId: number, signal: AbortSignal, start: 'asr.start' | 'tts.start', text?: string, audio?: (pcm: Uint8Array) => void) {
     const requestId = crypto.randomUUID(), ready = deferred<void>(), done = deferred<string>();
     if (signal.aborted) { ready.reject(abortError()); done.reject(abortError()); return { ready: ready.promise, done: done.promise, send: (_event: object) => {} }; }

@@ -1,3 +1,4 @@
+import { appPath } from './app-path';
 import { Pcm16Resampler } from '../../shared/pcm';
 import { abortError } from '../../shared/async';
 export interface CaptureSession { finish(): Promise<void>; cancel(): void; }
@@ -38,7 +39,7 @@ export const openMicrophone: CaptureFactory = async (frame, signal) => {
     await resumed;
     if (context.state === 'suspended') throw new Error('Audio context suspended');
     if (!context.audioWorklet?.addModule) throw new Error('AudioWorklet unavailable');
-    await context.audioWorklet.addModule('/mic-worklet.js');
+    await context.audioWorklet.addModule(appPath('mic-worklet.js'));
     if (signal.aborted || closed) throw abortError();
     const resampler = new Pcm16Resampler(context.sampleRate);
     let finishResolve: (() => void) | undefined;

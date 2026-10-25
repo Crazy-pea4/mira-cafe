@@ -4,10 +4,10 @@ import { speechClientSchema, type SpeechServerEvent } from '../shared/speech-pro
 import { SpeechError, type AsrSession, type SpeechProvider } from './speech';
 import { isAbort } from '../shared/async';
 
-export function sameLocalOrigin(origin: string | undefined, host: string | undefined): boolean {
-  try { const url = new URL(origin ?? ''); return url.host === host && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) && ['http:', 'https:'].includes(url.protocol); }
-  catch { return false; }
-}
+export { originAllowed as sameLocalOrigin } from './deployment';
+import { originAllowed } from './deployment';
+import { withBasePath } from '../shared/base-path';
+type SpeechAccess = { active:(id:string|null)=>boolean; watch:(id:string|null,callback:()=>void)=>(()=>void) };
 export function createSpeechHandler(provider: SpeechProvider | undefined, send: (event: SpeechServerEvent) => void) {
   let active: { requestId: string; turnId: number; controller: AbortController; asr?: AsrSession } | undefined;
   const close = () => { const previous = active; active = undefined; previous?.controller.abort(); previous?.asr?.cancel(); };
@@ -62,19 +62,21 @@ export function createSpeechHandler(provider: SpeechProvider | undefined, send: 
   };
   return { receive, close };
 }
-export function registerSpeech(app: FastifyInstance, provider?: SpeechProvider) {
+export function registerSpeech(app: FastifyInstance, provider?: SpeechProvider, options: {basePath?:string;publicOrigin?:string;access?:SpeechAccess} = {}) {
   app.register(websocket, { options: { maxPayload: 66000 } });
   app.register(async scope => {
-    scope.get('/api/speech', { websocket: true, onRequest: async (request, reply) => {
-      if (!sameLocalOrigin(request.headers.origin, request.headers.host)) return reply.code(403).send({ error: 'Origin not allowed' });
-    } }, socket => {
+    scope.get(withBasePath(options.basePath??'','api/speech'), { websocket: true, onRequest: async (request, reply) => {
+      if (!originAllowed(request.headers.origin, request.headers.host, options.publicOrigin)) return reply.code(403).send({ error: 'Origin not allowed' });
+    } }, (socket,request) => {
       const handler = createSpeechHandler(provider, event => {
         if (socket.readyState !== 1) return;
         if (socket.bufferedAmount > 1_000_000) { handler.close(); socket.close(1013); return; }
         socket.send(JSON.stringify(event));
       });
       // Attach immediately: async setup must not lose early browser messages.
-      socket.on('message', handler.receive); socket.on('close', handler.close); socket.on('error', handler.close);
+      const unwatch=options.access?.watch(request.miraSession,()=>{handler.close();socket.close(1008,'Session ended');}) ?? (()=>{});
+      socket.on('message',raw=>{if(options.access && !options.access.active(request.miraSession)){handler.close();socket.close(1008);return;}handler.receive(raw);});
+      socket.on('close',()=>{unwatch();handler.close();}); socket.on('error',()=>{unwatch();handler.close();});
     });
   });
 }

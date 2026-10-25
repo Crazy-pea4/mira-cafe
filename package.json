@@ -17,7 +17,10 @@
     "test:watch": "vitest",
     "check": "npm run typecheck && npm test && npm run build",
     "start:configured": "node --env-file=.env --import tsx server/index.ts",
-    "dev:configured": "node --env-file=.env scripts/dev.mjs"
+    "dev:configured": "node --env-file=.env scripts/dev.mjs",
+    "build:deploy": "npm run typecheck && MIRA_BASE_PATH=/mira vite build --outDir build/client && vite build --config vite.server.config.ts",
+    "start:production": "node build/server/index.js",
+    "check:deploy": "node scripts/check-deployment.mjs"
   },
   "dependencies": {
     "@fastify/static": "10.1.7",
