@@ -9,11 +9,11 @@ import { LocalSpeechTransport } from './core/speech-transport';
 import { ConversationEngine } from './core/engine';
 import { HttpTransport } from './core/transport';
 import { Character } from './Character';
+import { Suggestions } from './Suggestions';
 import { ModeBadge } from './ModeBadge';
 import { SCENE_ARTWORK } from './scene-artwork';
 import { UserMessage, type InputSource } from './UserMessage';
 const STATUS = { idle: '在等你开口', listening: '正在倾听', thinking: '正在想怎么说', speaking: '正在说话', error: '连接暂时中断' };
-const prompts = ['雨这么大，你怎么还没走？', '你在等谁？', '能看看你的照片吗？'];
 export function App() {
   const [{ engine, audio, entry }] = useState(() => {
     const audio = new SceneAudio(), voice = new VoiceInput(new LocalSpeechTransport());
@@ -43,13 +43,13 @@ export function App() {
     if (!value.trim() || value.trim().length > 800) return;
     setInputSource(source); entry.cancel(); setText(''); void engine.submit(value);
   };
-  const hold = () => entry.press({
+  const hold = () => { const suggestion=engine.getSnapshot().suggestions[0]??'我愿意听，你慢慢说。'; entry.press({
     begin: () => { engine.interrupt(true); return engine.getSnapshot().turnId; },
     text: value => send(value, 'asr'),
-    mock: () => { const latest = engine.getSnapshot(); send(prompts[latest.photo ? 0 : latest.completed ? 2 : 1], 'mock-voice'); },
+    mock: () => send(suggestion, 'mock-voice'),
     notice: message => engine.inputNotice(message),
     end: () => engine.endListening(),
-  });
+  }); };
   const active = state.status === 'speaking' || state.status === 'thinking';
   return <main className={`app scene-${state.scene}`}>
     <div className="ambient-grain"/>
@@ -68,7 +68,7 @@ export function App() {
       <div className="place-label"><span className="tiny-star">✦</span> 23:47 <span>·</span> 城市一隅</div>
       <div className="character-wrap"><Character state={state}/></div>
       <div className="table"><div className="coffee"><i/><i/><span/></div><div className="table-note">stay a little longer.</div></div>
-      {state.photo && <div className="memory-card" role="img" aria-label="Mira 展示的照片：雨后的山间与一束光"><div className="photo-landscape"><i/><b/></div><p>雨停的那一天 <span>09 / 12</span></p></div>}
+      {state.photo && <div className="memory-card" role="img" aria-label="Mira 展示的照片：雨后山间的一间小旅馆"><div className="photo-landscape"><i/><b/><em className="photo-inn"/></div><p>山间的小旅馆 <span>09 / 12</span></p></div>}
       <div className="dialogue-area">
         <div className="character-meta"><div><span className="name">Mira</span><span className="descriptor">旅行摄影师 · 26</span></div><span className={`state-badge ${state.status}`} data-testid="state"><i/>{STATUS[state.status]}</span></div>
         <div className="subtitle-box">
@@ -82,7 +82,7 @@ export function App() {
     </section>
     <section className="interaction" aria-label="与 Mira 对话">
       <UserMessage text={state.lastInput} source={inputSource}/>
-      <div className="suggestions">{prompts.map((prompt, index) => <button key={prompt} onClick={() => send(prompt)}><span>0{index + 1}</span>{prompt}<b>↗</b></button>)}</div>
+      <Suggestions values={state.suggestions} onChoose={value=>send(value)}/>
       <form className="composer" onSubmit={event => { event.preventDefault(); send(text); }}>
         <input value={text} onChange={event => setText(event.target.value)} aria-label="对 Mira 说点什么" placeholder="对 Mira 说点什么…" maxLength={800}/>
         <button className="send" type="submit" disabled={!text.trim()} aria-label="发送文字">↑</button>

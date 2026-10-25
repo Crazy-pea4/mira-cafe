@@ -55,3 +55,8 @@
 
 /* Keep privacy feedback close to the microphone without persistent instruction bars. */
 .voice-help[data-recording="true"]{color:#edb5a3}.voice-help[data-recording="true"]:before{content:"";display:inline-block;width:6px;height:6px;background:currentColor;border-radius:50%;margin-right:7px;vertical-align:middle}.page-footer{justify-content:center}
+
+/* Keep the existing photograph composition; a small inn anchors the story. */
+.photo-inn{position:absolute;left:48%;bottom:17%;width:23%;height:25%;background:linear-gradient(90deg,#77634d,#b79e71);box-shadow:2px 3px 5px #18232b55;z-index:2}.photo-inn:before{content:"";position:absolute;left:-18%;top:-32%;width:136%;height:36%;background:#655549;clip-path:polygon(50% 0,100% 100%,0 100%)}.photo-inn:after{content:"";position:absolute;left:17%;top:25%;width:20%;height:23%;background:#f2d19c;box-shadow:16px 0 #eac38b}.suggestions:empty{display:none}.suggestions button{min-width:0;line-height:1.6;overflow-wrap:anywhere}.suggestions button span,.suggestions button b{flex-shrink:0}
+/* All three contextual replies remain visible on narrow screens. */
+@media(max-width:600px){.suggestions{display:grid;grid-template-columns:minmax(0,1fr);overflow:visible}.suggestions button{min-height:44px;font-size:11px;padding:10px 12px}.suggestions button b{margin-left:auto}}
