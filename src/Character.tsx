@@ -15,7 +15,7 @@ export function Character({ state }: { state: Snapshot }) {
  const talking=state.status==='speaking'&&frames.mouth;
  const layer=(src:string,className:string,visible=true)=>!missing.includes(src)&&<img key={src+className} className={`portrait-patch ${className} ${visible?'visible':''}`} src={src} width={1024} height={1536} alt="" draggable={false} onError={()=>setMissing(old=>[...old,src])}/>;
  return <div className={`character character-portrait action-${state.action} status-${state.status}`} role="img"
-  aria-label={`Mira，${MOODS[state.emotion]}`}
+  aria-label={`Mira，身穿琥珀色雨衣、戴银色星星发夹，${MOODS[state.emotion]}`}
   data-emotion={state.emotion} data-blink={frames.blink} data-mouth={talking} data-drive={state.presentation}>
   {failed?<div className="portrait-fallback">画面暂时没加载出来<br/><small>你仍可以和 Mira 聊天</small></div>:
    <div className="portrait-canvas">

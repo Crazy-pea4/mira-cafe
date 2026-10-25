@@ -24,9 +24,9 @@
 .portrait-patch{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;object-position:center bottom;opacity:0;pointer-events:none}
 .portrait-patch.visible{opacity:1}
 .expression-patch{z-index:2;mask-image:radial-gradient(ellipse 7.6% 4.2% at 45% 20.5%,#000 65%,transparent 100%),radial-gradient(ellipse 7.6% 4.2% at 58.5% 18.3%,#000 65%,transparent 100%),radial-gradient(ellipse 5.8% 2.2% at 54.1% 28.1%,#000 60%,transparent 100%);transition:opacity .2s}
-.expression-curious{transform:translateX(-.09765625%)}
+.expression-curious{transform:translateY(.06510417%)}
 .expression-relieved{transform:translateY(.06510417%)}
-.blink-patch{z-index:3;transform:translateY(.06510417%);mask-image:radial-gradient(ellipse 6.6% 2.9% at 45% 21.6%,#000 65%,transparent 100%),radial-gradient(ellipse 6.6% 2.9% at 58.5% 19.7%,#000 65%,transparent 100%)}
+.blink-patch{z-index:3;mask-image:radial-gradient(ellipse 6.6% 2.9% at 45% 21.6%,#000 65%,transparent 100%),radial-gradient(ellipse 6.6% 2.9% at 58.5% 19.7%,#000 65%,transparent 100%)}
 .mouth-patch{z-index:4;transform:translateY(.06510417%);mask-image:radial-gradient(ellipse 5.8% 2.5% at 54.1% 28.2%,#000 65%,transparent 100%)}
 .action-look-window .portrait-canvas{transform:translateX(-7px) rotate(-1.5deg)}
 .action-offer-photo .portrait-canvas{transform:translate(-9px,-3px) scale(1.01)}
