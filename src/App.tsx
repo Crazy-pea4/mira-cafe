@@ -121,7 +121,7 @@ export function App() {
           <span className="mic-icon">♩</span><span>{voiceButton.label}<small>{voiceButton.detail}</small></span>
         </button>
       </form>
-      {input.showMessage && <p className="voice-help" role="status" data-testid="voice-help" data-recording={input.phase === 'recording'}>{input.message}</p>}
+      <p className="voice-help" role="status" data-testid="voice-help" data-recording={input.showMessage && input.phase === 'recording'}>{input.showMessage ? input.message : ''}</p>
     </section>
   </main>;
 }

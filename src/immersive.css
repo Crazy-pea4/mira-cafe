@@ -130,3 +130,10 @@ html, body, #root { width:100%; height:100%; overflow:hidden; }
 }
 
 .leave-cafe{padding:8px 12px;background:#17131c66;border:1px solid #e6caaa50;border-radius:20px;color:#eee1ce;font-size:11px;backdrop-filter:blur(5px)}
+
+/* Keep the held pointer over the same button as privacy/error text changes. */
+.interaction .voice-help{flex:0 0 2.8em;height:2.8em;min-height:0;max-height:2.8em;overflow:auto;overflow-wrap:anywhere;margin:0}
+.composer .talk{flex:0 0 142px;width:142px;min-width:0;height:44px}
+.composer .talk>span:last-child{min-width:0}
+.composer .talk small{white-space:nowrap}
+@media(max-width:600px){.composer .talk{flex-basis:102px;width:102px}}

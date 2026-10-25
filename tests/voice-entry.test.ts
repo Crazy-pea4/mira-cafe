@@ -82,6 +82,18 @@ describe('visible voice entry with fake permission, capture and ASR only',()=>{
   expect(s.callbacks.mock).toHaveBeenCalledOnce();expect(s.requestPermission).not.toHaveBeenCalled();expect(s.openAsr).not.toHaveBeenCalled();
   expect(voiceButtonView(s.entry.getSnapshot()).detail).toBe('示例，不录音');s.entry.cancel();
  });
+ it('cancels a held capture on pointer cancellation/lost capture or button blur, ignoring late fake frames',async()=>{
+  const s=setup();s.entry.configure(true,true);s.permission.resolve();await s.entry.prepare(s.callbacks.notice);
+  s.entry.press(s.callbacks);await flush();s.captures[0].frame(new Uint8Array(8000));
+  // App binds pointercancel, lostpointercapture and button blur to this idempotent method.
+  s.entry.cancelHeld();s.entry.cancelHeld();await flush();
+  expect(s.entry.getSnapshot()).toMatchObject({held:false,phase:'idle'});
+  expect(s.sessions[0].signal.aborted).toBe(true);
+  expect(s.captures[0].cancel).toHaveBeenCalled();
+  s.sessions[0].ready.resolve();s.sessions[0].result.resolve('迟到识别');await flush();
+  expect(s.sessions[0].commit).not.toHaveBeenCalled();expect(s.callbacks.text).not.toHaveBeenCalled();
+  s.entry.release();expect(s.callbacks.mock).not.toHaveBeenCalled();s.entry.cancel();
+ });
  it('drops recognition after focus loss and after a newer recording replaces it',async()=>{
   const s=setup();s.entry.configure(true,true);s.permission.resolve();await s.entry.prepare(s.callbacks.notice);
   s.entry.press(s.callbacks);await flush();s.captures[0].frame(new Uint8Array(8000));s.sessions[0].ready.resolve();await flush();s.entry.release();await flush();
