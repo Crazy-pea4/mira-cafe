@@ -11,7 +11,7 @@
 
 ## 离线与浏览器检查
 
-`npm run check`：32 个测试文件、302 项通过，类型检查和根路径生产构建通过。Prettier 3.9.10 已作为锁定开发依赖统一格式化项目，提供 `format` 与 `format:check`。格式化暴露了旧 `@ts-expect-error` 注释的位置问题，改为显式 Node 加密传输模块类型声明，再重新通过类型检查。
+`npm run check`：32 个测试文件、303 项通过，类型检查和根路径生产构建通过。Prettier 3.9.10 已作为锁定开发依赖统一格式化项目，提供 `format` 与 `format:check`。格式化暴露了旧 `@ts-expect-error` 注释的位置问题，改为显式 Node 加密传输模块类型声明，再重新通过类型检查。
 
 `build:deploy` 生成 /mira 前端及 Node 服务端；`check:deploy` 使用临时密码、隔离状态和 Mock 验证 30 项 HTTP/WS 认证、登录退出、资源和子路径。没有加载真实密钥。
 
@@ -102,3 +102,15 @@ Chromium 使用合成 WAV 麦克风设备，走实际 getUserMedia→AudioWorkle
 这次末尾截图有语音降级提示，说明异常时实际字幕保护生效；不据TTS请求计数声称每句都有成功声音或完成真人听感验收。三轮证据存于本机忽略文件`.local/progress-live-final-20261026.json`，测试已结束并退出登录。本阶段两次线上检查总计6次DeepSeek、9次TTS、0次ASR；未重复回放此前的收费脚本。
 
 ![最新线上手机：来信与对白](images/progress-save/live-restored-mobile.png)
+
+## 切换页签继续对话与声音（73920f3）
+
+用户提供切页签后回复停止的截图，要求取消该操作。旧visibilitychange直接调用离页清理，同时中断引擎并销毁AudioContext，现拆分为后台只结束麦克风采集/识别；模型请求、旁白、音频、字幕和呈现回执继续。导航/关闭页面及组件卸载才清理全部资源，主动打断和重置仍有效。
+
+32文件303项、类型、两种构建、Prettier和Linux root/受限用户各30项部署检查通过。回归覆盖后台等待回复、持续播放、旁白结束后继续对白、完成后保存、后台麦克风结束，以及真实离页取消。
+
+线上真实API受控后台检查：1次DeepSeek、2次Qwen TTS均完成，2份回执200，15个原生WebAudio片段在后台开始/结束；没有取消请求、音源stop、AudioContext.close或语音/页面错误。完成状态及arrival事实写入localStorage，切回后有实际对白和建议。原生音频时钟保留，物理输出静音且不采集麦克风。证据在`.local/tab-continue-live-20261026.json`，有界检查结束并退出登录。
+
+验证边界：尝试隔离浏览器的原生页签切换时，自动化环境未产生document.hidden变化；最终使用受控hidden/visibilitychange事件验证同一路径，不将其称为原生OS页签或手机后台长期运行验收。
+
+![后台完成后保留对白与建议](images/tab-continuation/continued-dialogue.png)
