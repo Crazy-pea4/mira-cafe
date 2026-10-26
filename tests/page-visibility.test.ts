@@ -67,6 +67,7 @@ function setup() {
       engine.suspend();
     },
     vi.fn(),
+    () => entry.suspend(),
   );
   const hide = () => {
     document.hidden = true;
@@ -102,7 +103,7 @@ function setup() {
   };
 }
 afterEach(() => vi.useRealTimers());
-describe('tab visibility is cleanup, not character dialogue', () => {
+describe('tab switches preserve replies and playback, while releasing capture', () => {
   it('leaves the entire untouched opening and idle input unchanged after repeated tab switches', () => {
     const s = setup(),
       opening = s.engine.getSnapshot(),
@@ -122,57 +123,60 @@ describe('tab visibility is cleanup, not character dialogue', () => {
     expect(s.audio.unlockFromGesture).not.toHaveBeenCalled();
     s.close();
   });
-  it('cancels a thinking turn once, ignores its late reply and never auto-resumes on focus', async () => {
+  it('keeps an in-flight reply alive and presents it normally while the tab is hidden', async () => {
     const s = setup(),
       work = s.engine.submit('问候');
     s.hide();
-    const cancelled = s.engine.getSnapshot();
+    const waiting = s.engine.getSnapshot();
     s.show();
     s.hide();
     s.show();
-    expect(s.engine.getSnapshot()).toBe(cancelled);
-    expect(s.signal().aborted).toBe(true);
+    expect(s.engine.getSnapshot()).toBe(waiting);
+    expect(s.signal().aborted).toBe(false);
+    s.hide();
     s.answer();
+    await flush();
+    expect(s.engine.getSnapshot().status).toBe('speaking');
+    s.playing.resolve();
     await work;
-    expect(s.audio.play).not.toHaveBeenCalled();
+    s.show();
+    expect(s.audio.play).toHaveBeenCalledOnce();
     expect(s.transport.turn).toHaveBeenCalledTimes(1);
-    expect(s.transport.cancel).toHaveBeenCalledTimes(1);
+    expect(s.transport.cancel).not.toHaveBeenCalled();
+    expect(s.audio.dispose).not.toHaveBeenCalled();
     expect(s.engine.getSnapshot()).toMatchObject({
       status: 'idle',
-      subtitle: '',
-      suggestions: [],
-      completed: 0,
+      subtitle: '已经呈现的这句话。',
+      completed: 1,
     });
     s.close();
   });
-  it('stops speaking, retains only the visible subtitle and never replays or commits the unfinished sentence', async () => {
+  it('continues the same speaking turn across tab switches without stopping or replaying audio', async () => {
     const s = setup(),
       work = s.engine.submit('问候');
     s.answer();
     await flush();
     expect(s.engine.getSnapshot().status).toBe('speaking');
     const visible = s.engine.getSnapshot().subtitle;
+    const speaking = s.engine.getSnapshot();
+    const stops = s.audio.stop.mock.calls.length;
     s.hide();
+    s.show();
+    s.hide();
+    s.show();
+    expect(s.engine.getSnapshot()).toBe(speaking);
+    expect(s.audio.play).toHaveBeenCalledTimes(1);
+    expect(s.signal().aborted).toBe(false);
+    expect(s.transport.cancel).not.toHaveBeenCalled();
+    expect(s.audio.stop).toHaveBeenCalledTimes(stops);
+    expect(s.audio.dispose).not.toHaveBeenCalled();
+    s.playing.resolve();
     await work;
-    const stopped = s.engine.getSnapshot();
-    s.show();
-    s.hide();
-    s.show();
-    expect(s.engine.getSnapshot()).toBe(stopped);
-    expect(stopped).toMatchObject({
+    expect(s.engine.getSnapshot()).toMatchObject({
       status: 'idle',
       subtitle: visible,
-      presentation: 'none',
-      suggestions: [],
-      completed: 0,
+      completed: 1,
     });
-    expect(s.audio.play).toHaveBeenCalledTimes(1);
-    expect(s.signal().aborted).toBe(true);
-    expect(s.transport.cancel).toHaveBeenCalledTimes(1);
-    const next = s.engine.submit('继续');
-    expect(s.transport.turn.mock.calls[1][0].history).toEqual([]);
-    s.hide();
-    await next;
     s.close();
   });
   it('preserves completed dialogue, suggestions, turn identity and input without a cancellation request', async () => {
@@ -197,10 +201,20 @@ describe('tab visibility is cleanup, not character dialogue', () => {
     expect(s.audio.play).toHaveBeenCalledTimes(1);
     s.close();
   });
-  it('rolls back an unfinished narrative cue without advancing its receipt or reviving it on return', async () => {
+  it('finishes narration and its following dialogue while hidden, preserving acknowledged props', async () => {
     vi.useFakeTimers();
     const s = setup(),
-      presented = vi.fn();
+      presented = vi.fn(async (r) => ({
+        turnId: r.turnId,
+        through: r.through,
+        story: {
+          act: 'invitation',
+          facts: ['arrival', 'photo-drift'],
+          ending: null,
+          planQuote: '',
+          declined: false,
+        },
+      }));
     Object.assign(s.transport, { presented });
     const work = s.engine.submit('照片');
     s.pending.resolve({
@@ -218,18 +232,21 @@ describe('tab visibility is cleanup, not character dialogue', () => {
     await flush();
     expect(s.engine.getSnapshot().status).toBe('narrating');
     s.hide();
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(s.engine.getSnapshot().status).toBe('speaking');
+    expect(s.audio.play).toHaveBeenCalledOnce();
+    expect(presented).toHaveBeenCalledTimes(1);
+    s.playing.resolve();
     await work;
     s.show();
-    await vi.advanceTimersByTimeAsync(6000);
     expect(s.engine.getSnapshot()).toMatchObject({
       status: 'idle',
-      narration: '',
-      stageProps: { photoPose: 'aside' },
-      suggestions: [],
-      completed: 0,
+      stageProps: { photoPose: 'near' },
+      subtitle: '之后才应说的话。',
+      completed: 1,
     });
-    expect(s.audio.play).not.toHaveBeenCalled();
-    expect(presented).not.toHaveBeenCalled();
+    expect(presented).toHaveBeenCalledTimes(2);
+    expect(s.transport.cancel).not.toHaveBeenCalled();
     s.close();
   });
   it('keeps a failed reply available for an explicit retry instead of replacing it on return', async () => {
@@ -243,6 +260,18 @@ describe('tab visibility is cleanup, not character dialogue', () => {
     expect(failed.status).toBe('error');
     expect(s.engine.getSnapshot()).toBe(failed);
     expect(s.transport.turn).toHaveBeenCalledTimes(1);
+    s.close();
+  });
+  it('still cancels active work when actually leaving the page', async () => {
+    const s = setup(),
+      work = s.engine.submit('问候');
+    s.page.emit('pagehide');
+    expect(s.signal().aborted).toBe(true);
+    expect(s.audio.dispose).toHaveBeenCalledOnce();
+    s.answer();
+    await work;
+    expect(s.audio.play).not.toHaveBeenCalled();
+    expect(s.transport.cancel).toHaveBeenCalledOnce();
     s.close();
   });
   it('invalidates pending permission when hidden without restoring it on return', async () => {

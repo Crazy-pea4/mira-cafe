@@ -7,14 +7,15 @@ interface AudioLifecycle {
   unlockFromGesture(): Promise<void>;
   dispose(): void;
 }
-// Lifecycle cleanup may send a cancellation control request, but never starts
-// a model reply, speech or recording. Only trusted gestures unlock audio.
+// Tab switches only release microphone ownership. Replies and playback keep
+// running; navigation/unmount still releases all resources.
 export function bindAudioLifecycle(
   target: EventSource,
   visibility: EventSource & { readonly hidden: boolean },
   audio: AudioLifecycle,
   cancel: () => void,
   notice: (text: string) => void,
+  stopRecording: () => void = () => {},
 ) {
   let active = true,
     generation = 0;
@@ -43,7 +44,10 @@ export function bindAudioLifecycle(
     audio.dispose();
   };
   const hidden = () => {
-    if (visibility.hidden) leave();
+    if (visibility.hidden) {
+      generation++;
+      stopRecording();
+    }
   };
   for (const name of ['pointerdown', 'click', 'keydown'])
     target.addEventListener(name, gesture, true);

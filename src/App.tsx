@@ -101,6 +101,7 @@ export function App() {
         engine.suspend();
       },
       setAudioNotice,
+      () => entry.suspend(),
     );
     const blur = () => entry.blur();
     window.addEventListener('blur', blur);

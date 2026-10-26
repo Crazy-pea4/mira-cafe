@@ -127,7 +127,7 @@ describe('trusted interaction and page lifecycle, fake audio only', () => {
     expect(s.notice).toHaveBeenLastCalledWith('');
     s.close();
   });
-  it('cancels on pagehide and hides, and discards late unlock results after cleanup', async () => {
+  it('cleans up on navigation, keeps playback on tab switches, and discards late unlock results', async () => {
     const s = setup();
     let finish!: () => void;
     s.audio.unlockFromGesture.mockImplementationOnce(
@@ -145,7 +145,8 @@ describe('trusted interaction and page lifecycle, fake audio only', () => {
     expect(s.notice).not.toHaveBeenCalled();
     s.document.hidden = true;
     s.document.emit('visibilitychange');
-    expect(s.cancel).toHaveBeenCalledTimes(2);
+    expect(s.cancel).toHaveBeenCalledTimes(1);
+    expect(s.audio.dispose).toHaveBeenCalledTimes(1);
     s.page.emit('click');
     expect(s.audio.unlockFromGesture).toHaveBeenCalledOnce();
     s.close();
