@@ -11,10 +11,16 @@ function assistantSegments(content: string): Reply['segments'] {
     if (/[{}\[\]`]/.test(content) || /^["<]/.test(content.trim())) return [];
     const text = content.trim();
     if (!text) return [];
-    return (text.match(/[\s\S]{1,180}/gu) ?? []).slice(-3).map(text => ({ text, emotion: 'guarded', action: 'idle' }));
+    return (text.match(/[\s\S]{1,180}/gu) ?? [])
+      .slice(-3)
+      .map((text) => ({ text, emotion: 'guarded', action: 'idle' }));
   }
 }
-export function buildDialogueMessages(system: string, request: TurnRequest, storyMode=false): ModelMessage[] {
+export function buildDialogueMessages(
+  system: string,
+  request: TurnRequest,
+  storyMode = false,
+): ModelMessage[] {
   const messages: ModelMessage[] = [{ role: 'system', content: system }];
   for (const entry of [...request.history, { role: 'user' as const, content: request.text }]) {
     if (entry.role === 'assistant') {
@@ -24,8 +30,13 @@ export function buildDialogueMessages(system: string, request: TurnRequest, stor
       // Legacy clients used one assistant message per sentence; coalesce them.
       const prior = previous?.role === 'assistant' ? assistantSegments(previous.content) : [];
       let story: Reply['story'];
-      try{story=replySchema.parse(JSON.parse(entry.content)).story;}catch{}
-      const content = JSON.stringify({ segments: [...prior, ...segments].slice(-3), ...(storyMode?{story:story??{intent:'engage'}}:story?{story}:{}) });
+      try {
+        story = replySchema.parse(JSON.parse(entry.content)).story;
+      } catch {}
+      const content = JSON.stringify({
+        segments: [...prior, ...segments].slice(-3),
+        ...(storyMode ? { story: story ?? { intent: 'engage' } } : story ? { story } : {}),
+      });
       if (previous?.role === 'assistant') previous.content = content;
       else messages.push({ role: 'assistant', content });
     } else {

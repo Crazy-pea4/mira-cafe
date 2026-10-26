@@ -10,20 +10,20 @@
 4. 真正联调前核对账号价格/用量，再设置 MIRA_ENABLE_LIVE_APIS=true，按需设 MIRA_PROVIDER=deepseek、MIRA_SPEECH_PROVIDER=qwen。录音仍须明确点击并授权；声音随正常对话回复播放。本轮 agent 不录音、不播放、不增加付费测试。
 5. 停止原有本项目服务，执行 `npm run build && npm run start:configured`，仍打开 http://127.0.0.1:3001/。普通 `npm start` 不加载 .env；开发时使用 `npm run dev:configured`。不要同时启动两个 API 服务。
 
-| 变量 | 作用 |
-|---|---|
-| MIRA_ENABLE_LIVE_APIS | 必须明确为 true，服务端才读取密钥并启用已配置适配器；否则完全 Mock |
-| MIRA_PROVIDER | mock 或 deepseek |
-| DEEPSEEK_API_KEY | DeepSeek 服务端密钥 |
-| DEEPSEEK_MODEL | 可替换模型名，默认 deepseek-flash；固定采用非思考模式 thinking.type=disabled |
-| MIRA_SPEECH_PROVIDER | mock 或 qwen |
-| DASHSCOPE_API_KEY | 所选地域的 DashScope 服务端密钥 |
-| DASHSCOPE_REGION | 已预填 cn-beijing，匹配用户选择与北京密钥 |
-| DASHSCOPE_WORKSPACE_ID | 如使用工作空间，填对应 ID；可为空，不能填密钥 |
-| QWEN_ASR_ENDPOINT / QWEN_TTS_ENDPOINT | 已预填北京兼容端点，必须同地域；模型名由下面变量追加 |
-| QWEN_ASR_MODEL | 默认 qwen3-asr-flash-realtime |
-| QWEN_TTS_MODEL | 默认 qwen3-tts-flash-realtime |
-| QWEN_TTS_VOICE | 默认千雪 Chelsie，保留配置项；仅使用预置音色，不做克隆或定制 |
+| 变量                                  | 作用                                                                         |
+| ------------------------------------- | ---------------------------------------------------------------------------- |
+| MIRA_ENABLE_LIVE_APIS                 | 必须明确为 true，服务端才读取密钥并启用已配置适配器；否则完全 Mock           |
+| MIRA_PROVIDER                         | mock 或 deepseek                                                             |
+| DEEPSEEK_API_KEY                      | DeepSeek 服务端密钥                                                          |
+| DEEPSEEK_MODEL                        | 可替换模型名，默认 deepseek-flash；固定采用非思考模式 thinking.type=disabled |
+| MIRA_SPEECH_PROVIDER                  | mock 或 qwen                                                                 |
+| DASHSCOPE_API_KEY                     | 所选地域的 DashScope 服务端密钥                                              |
+| DASHSCOPE_REGION                      | 已预填 cn-beijing，匹配用户选择与北京密钥                                    |
+| DASHSCOPE_WORKSPACE_ID                | 如使用工作空间，填对应 ID；可为空，不能填密钥                                |
+| QWEN_ASR_ENDPOINT / QWEN_TTS_ENDPOINT | 已预填北京兼容端点，必须同地域；模型名由下面变量追加                         |
+| QWEN_ASR_MODEL                        | 默认 qwen3-asr-flash-realtime                                                |
+| QWEN_TTS_MODEL                        | 默认 qwen3-tts-flash-realtime                                                |
+| QWEN_TTS_VOICE                        | 默认千雪 Chelsie，保留配置项；仅使用预置音色，不做克隆或定制                 |
 
 北京工作空间地址格式为 `wss://<你的工作空间ID>.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime`；新加坡为 `wss://<你的工作空间ID>.ap-southeast-1.maas.aliyuncs.com/api-ws/v1/realtime`。如果账号使用官方兼容端点，北京为 `wss://dashscope.aliyuncs.com/api-ws/v1/realtime`，新加坡为 `wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime`。请按控制台与官方文档核对自己的账号可用端点、模型与地域，不把占位尖括号照填。
 
@@ -51,12 +51,12 @@ DeepSeek 检查结束状态、整理完整已知包装并经 Zod 校验后只提
 已确认北京；原10元自动测试授权是历史测试范围，产品金额/累计次数限制现已按用户要求取消。用户已自行配置凭据并完成三次限量连通，用户后来追加授权真实多轮连测和仅对白格式失败的受控修正，已完成的最新结果见 LIVE_MULTITURN_TEST.md。当前自动验证已停止；AI 不得未经新授权录音或出声。尚待真实设备验证：真实设备权限与采样率、PCM 链路、Qwen 实际事件顺序、真人听感、句子字幕对齐、连续打断、弱网重连和延迟/成本。当前 192 项单测使用替身，另有明确记录的真实无声 API 连测；单测不代表真人麦克风、听感或本次格式修复已获人工验收。
 
 官方依据：
+
 - [DeepSeek chat completion](https://api-docs.deepseek.com/api/create-chat-completion/)
 - [Qwen ASR 实时交互](https://help.aliyun.com/en/model-studio/qwen-asr-realtime-interaction-process)
 - [ASR 客户端事件](https://help.aliyun.com/en/model-studio/qwen-asr-realtime-client-events)
 - [Qwen TTS 实时交互](https://help.aliyun.com/en/model-studio/interactive-process-of-qwen-tts-realtime-synthesis)
 - [TTS 客户端事件](https://help.aliyun.com/en/model-studio/qwen-tts-realtime-client-events)
-
 
 ## 不阻断使用的统计与日志
 

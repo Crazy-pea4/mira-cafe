@@ -2,20 +2,37 @@ import { decodePcm16 } from '../../shared/pcm';
 import { abortError } from '../../shared/async';
 import { AudioPlaybackBlocked } from './audio';
 import type { SpeechTransport } from './speech-transport';
-export interface ScheduledPcm { stop(): void; }
+export interface ScheduledPcm {
+  stop(): void;
+}
 export interface PlaybackClock {
-  now(): number; running(): boolean;
+  now(): number;
+  running(): boolean;
   schedule(samples: Float32Array, at: number, ended: () => void): ScheduledPcm;
 }
 export class PcmPlaybackQueue {
   readonly done: Promise<void>;
-  private resolve!: () => void; private reject!: (error: Error) => void;
-  private nodes = new Set<ScheduledPcm>(); private nextTime = 0; private firstTime?: number;
-  private started = false; private ended = false; private closed = false;
-  private poll: ReturnType<typeof setInterval>; private watchdog: ReturnType<typeof setTimeout>;
+  private resolve!: () => void;
+  private reject!: (error: Error) => void;
+  private nodes = new Set<ScheduledPcm>();
+  private nextTime = 0;
+  private firstTime?: number;
+  private started = false;
+  private ended = false;
+  private closed = false;
+  private poll: ReturnType<typeof setInterval>;
+  private watchdog: ReturnType<typeof setTimeout>;
   private cancel: () => void;
-  constructor(private clock: PlaybackClock, private signal: AbortSignal, private onStart: () => void) {
-    this.done = new Promise((resolve, reject) => { this.resolve = resolve; this.reject = reject; }); void this.done.catch(() => {});
+  constructor(
+    private clock: PlaybackClock,
+    private signal: AbortSignal,
+    private onStart: () => void,
+  ) {
+    this.done = new Promise((resolve, reject) => {
+      this.resolve = resolve;
+      this.reject = reject;
+    });
+    void this.done.catch(() => {});
     this.cancel = () => this.fail(abortError());
     signal.addEventListener('abort', this.cancel, { once: true });
     this.poll = setInterval(() => this.tick(), 10);
@@ -24,83 +41,170 @@ export class PcmPlaybackQueue {
   }
   enqueue(bytes: Uint8Array) {
     if (this.closed || this.ended || this.signal.aborted) return;
-    const samples = decodePcm16(bytes); if (!samples.length) return;
+    const samples = decodePcm16(bytes);
+    if (!samples.length) return;
     const start = Math.max(this.clock.now() + 0.04, this.nextTime);
-    if (start - this.clock.now() > 60) { this.fail(new Error('语音缓存过长，已取消。')); return; }
-    this.firstTime ??= start; this.nextTime = start + samples.length / 24000;
+    if (start - this.clock.now() > 60) {
+      this.fail(new Error('语音缓存过长，已取消。'));
+      return;
+    }
+    this.firstTime ??= start;
+    this.nextTime = start + samples.length / 24000;
     const node = this.clock.schedule(samples, start, () => {
       if (this.closed) return;
-      this.tick(); this.nodes.delete(node); this.completeIfReady();
+      this.tick();
+      this.nodes.delete(node);
+      this.completeIfReady();
     });
     this.nodes.add(node);
   }
-  end() { if (this.closed) return; this.ended = true; if (this.firstTime === undefined) this.fail(new Error('未收到语音，已保留文字。')); else this.completeIfReady(); }
+  end() {
+    if (this.closed) return;
+    this.ended = true;
+    if (this.firstTime === undefined) this.fail(new Error('未收到语音，已保留文字。'));
+    else this.completeIfReady();
+  }
   private tick() {
     if (this.closed || this.signal.aborted) return;
     // Wall-clock timers may fire while AudioContext is suspended: only its clock can start visuals.
-    if (!this.started && this.firstTime !== undefined && this.clock.running() && this.clock.now() >= this.firstTime) { this.started = true; this.onStart(); }
+    if (
+      !this.started &&
+      this.firstTime !== undefined &&
+      this.clock.running() &&
+      this.clock.now() >= this.firstTime
+    ) {
+      this.started = true;
+      this.onStart();
+    }
   }
-  private completeIfReady() { if (this.ended && !this.nodes.size && !this.closed) { this.closed = true; this.cleanup(); this.resolve(); } }
+  private completeIfReady() {
+    if (this.ended && !this.nodes.size && !this.closed) {
+      this.closed = true;
+      this.cleanup();
+      this.resolve();
+    }
+  }
   fail(error: Error) {
-    if (this.closed) return; this.closed = true; this.cleanup();
-    for (const node of this.nodes) node.stop(); this.nodes.clear(); this.reject(error);
+    if (this.closed) return;
+    this.closed = true;
+    this.cleanup();
+    for (const node of this.nodes) node.stop();
+    this.nodes.clear();
+    this.reject(error);
   }
-  private cleanup() { clearInterval(this.poll); clearTimeout(this.watchdog); this.signal.removeEventListener('abort', this.cancel); }
+  private cleanup() {
+    clearInterval(this.poll);
+    clearTimeout(this.watchdog);
+    this.signal.removeEventListener('abort', this.cancel);
+  }
 }
 function browserClock(context: AudioContext): PlaybackClock {
-  return { now: () => context.currentTime, running: () => context.state === 'running',
+  return {
+    now: () => context.currentTime,
+    running: () => context.state === 'running',
     schedule: (samples, at, ended) => {
       const buffer = context.createBuffer(1, samples.length, 24000);
       buffer.getChannelData(0).set(samples);
-      const source = context.createBufferSource(); source.buffer = buffer; source.connect(context.destination);
-      source.onended = () => { source.disconnect(); ended(); }; source.start(at);
-      return { stop: () => { source.onended = null; try { source.stop(); } catch { /* already ended */ } source.disconnect(); } };
-    } };
+      const source = context.createBufferSource();
+      source.buffer = buffer;
+      source.connect(context.destination);
+      source.onended = () => {
+        source.disconnect();
+        ended();
+      };
+      source.start(at);
+      return {
+        stop: () => {
+          source.onended = null;
+          try {
+            source.stop();
+          } catch {
+            /* already ended */
+          }
+          source.disconnect();
+        },
+      };
+    },
+  };
 }
 export class PcmSpeechPlayer {
-  private context?: AudioContext; private clock?: PlaybackClock; private controller?: AbortController;
-  constructor(private transport: SpeechTransport, private createContext = () => new AudioContext()) {}
-  get ready() { return !!this.clock && this.context?.state === 'running'; }
+  private context?: AudioContext;
+  private clock?: PlaybackClock;
+  private controller?: AbortController;
+  constructor(
+    private transport: SpeechTransport,
+    private createContext = () => new AudioContext(),
+  ) {}
+  get ready() {
+    return !!this.clock && this.context?.state === 'running';
+  }
   async unlock() {
     this.context ??= this.createContext();
     const context = this.context;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       // resume() runs synchronously inside the gesture; no silent buffer or welcome speech.
-      if (context.state !== 'running') await Promise.race([
-        context.resume(),
-        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new AudioPlaybackBlocked()), 1500); }),
-      ]);
+      if (context.state !== 'running')
+        await Promise.race([
+          context.resume(),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new AudioPlaybackBlocked()), 1500);
+          }),
+        ]);
       if (this.context !== context) throw abortError();
       if (context.state !== 'running') throw new AudioPlaybackBlocked();
       this.clock = browserClock(context);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') throw error;
       throw new AudioPlaybackBlocked();
-    } finally { clearTimeout(timer); }
+    } finally {
+      clearTimeout(timer);
+    }
   }
   dispose() {
     this.stop();
-    const context = this.context; this.context = undefined; this.clock = undefined;
+    const context = this.context;
+    this.context = undefined;
+    this.clock = undefined;
     if (context) void context.close().catch(() => {});
   }
   async play(text: string, turnId: number, signal: AbortSignal, onStart: () => void) {
-    if (!this.clock || !this.context || this.context.state !== 'running') throw new AudioPlaybackBlocked();
+    if (!this.clock || !this.context || this.context.state !== 'running')
+      throw new AudioPlaybackBlocked();
     this.stop();
-    const controller = new AbortController(); this.controller = controller;
-    const cancel = () => controller.abort(); signal.addEventListener('abort', cancel, { once: true });
+    const controller = new AbortController();
+    this.controller = controller;
+    const cancel = () => controller.abort();
+    signal.addEventListener('abort', cancel, { once: true });
     if (signal.aborted) cancel();
     const queue = new PcmPlaybackQueue(this.clock, controller.signal, onStart);
-    void Promise.resolve().then(() => {
-      if (controller.signal.aborted) throw abortError();
-      return this.transport.synthesize(text, turnId, controller.signal, pcm => {
-      if (this.controller === controller && !controller.signal.aborted) {
-        try { queue.enqueue(pcm); } catch { queue.fail(new Error('语音数据异常，已保留文字。')); }
-      }
-      });
-    }).then(() => queue.end(), error => queue.fail(error instanceof Error ? error : new Error('语音连接中断。')));
-    try { await queue.done; }
-    finally { controller.abort(); signal.removeEventListener('abort', cancel); if (this.controller === controller) this.controller = undefined; }
+    void Promise.resolve()
+      .then(() => {
+        if (controller.signal.aborted) throw abortError();
+        return this.transport.synthesize(text, turnId, controller.signal, (pcm) => {
+          if (this.controller === controller && !controller.signal.aborted) {
+            try {
+              queue.enqueue(pcm);
+            } catch {
+              queue.fail(new Error('语音数据异常，已保留文字。'));
+            }
+          }
+        });
+      })
+      .then(
+        () => queue.end(),
+        (error) => queue.fail(error instanceof Error ? error : new Error('语音连接中断。')),
+      );
+    try {
+      await queue.done;
+    } finally {
+      controller.abort();
+      signal.removeEventListener('abort', cancel);
+      if (this.controller === controller) this.controller = undefined;
+    }
   }
-  stop() { this.controller?.abort(); this.controller = undefined; }
+  stop() {
+    this.controller?.abort();
+    this.controller = undefined;
+  }
 }

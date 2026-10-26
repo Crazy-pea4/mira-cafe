@@ -6,13 +6,13 @@
 
 用户已确认采用。所有图片原样保留，1024×1536 RGBA，未编辑像素；本地检查尺寸、透明像素和身份。
 
-| 文件 | Library ID | 用途 |
-|---|---|---|
-| neutral.png | libfile_dfc58edad8f08191abc1a9564f989fc2 | 固定身体与中性/戒备基图 |
-| mira-curious-v1.png | libfile_ebefd5143d3081919ca0a30ab0cf9d0e | 好奇：局部眉眼/嘴 |
-| mira-warm-v1.png | libfile_de5f7719b9c48191b08c80b8b8abc32b | 释然：局部眉眼/嘴 |
-| mira-blink-v1.png | libfile_9ba92da97b5c81919ccf8b2522f9422f | 独立眼区闭眼 |
-| mira-speaking-v1.png | libfile_b259ea76767881919190f48cfa81daf8 | 独立嘴区张嘴 |
+| 文件                 | Library ID                               | 用途                    |
+| -------------------- | ---------------------------------------- | ----------------------- |
+| neutral.png          | libfile_dfc58edad8f08191abc1a9564f989fc2 | 固定身体与中性/戒备基图 |
+| mira-curious-v1.png  | libfile_ebefd5143d3081919ca0a30ab0cf9d0e | 好奇：局部眉眼/嘴       |
+| mira-warm-v1.png     | libfile_de5f7719b9c48191b08c80b8b8abc32b | 释然：局部眉眼/嘴       |
+| mira-blink-v1.png    | libfile_9ba92da97b5c81919ccf8b2522f9422f | 独立眼区闭眼            |
+| mira-speaking-v1.png | libfile_b259ea76767881919190f48cfa81daf8 | 独立嘴区张嘴            |
 
 身体基图不切换，局部使用渐变 CSS mask 羽化；curious 横移 -1 原始像素，其余纵移 +1 原始像素，对齐鼻部参照。身体/衣服漂移区不参与覆盖。眼和嘴图层独立，眨眼不覆盖嘴型。
 
