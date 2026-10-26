@@ -1,6 +1,6 @@
 # 服务器部署状态 · 2026-10-26
 
-**已开放私密评审：[https://iamm.xyz/mira](https://iamm.xyz/mira)。** 未登录会进入邀请密码页，API/素材返回401；不再是503锁定页。实际应用版本为 `73920f3`，切换页签继续回复与音频，包含自动存档/刷新续接、重置按钮、对白防空白保护，以及此前时间线、常驻对白框、五套姿态和剧情收束修复。
+**已开放私密评审：[https://iamm.xyz/mira](https://iamm.xyz/mira)。** 未登录会进入邀请密码页，API/素材返回401；不再是503锁定页。实际应用版本为 `5703005`，增加推进选项高亮及自由输入判断，保留切页签继续、自动存档/刷新续接、重置、对白防空白，以及此前时间线、常驻对白框、五套姿态和剧情收束修复。
 
 ## 访问方式
 
@@ -11,7 +11,7 @@
 ## 实际部署
 
 - 经既有 Workbench 通道，发布包 SHA256：`36695f58207ea02a04e429d712de867eda186cc876ddbb116557e7c6af434023`。
-- 发布目录 `/opt/mira-cafe/releases/73920f3`，`/opt/mira-cafe/current` 指向它。旧 `efa4008`、`3ca7291`、`5ecd5dd`、`d0144bf` 与 `95c4964` 保留，供回滚。
+- 发布目录 `/opt/mira-cafe/releases/5703005`，`/opt/mira-cafe/current` 指向它。旧 `73920f3`、`efa4008`、`3ca7291`、`5ecd5dd`、`d0144bf` 与 `95c4964` 保留，供回滚。
 - 包仅含编译前后端、package清单/锁文件与无秘密检查工具，不含Mac node_modules、.env、私密文件、测试日志、音频或视频。
 - 在Linux用既有Node 22.23.2从官方npm源安装84个锁定生产包，禁用安装脚本。目录755、静态文件644、发布所有者root；配置仍root:root 600，状态目录由mira-cafe拥有且700。
 - `/etc/mira-cafe.ready` 已创建；`mira-cafe.service` active，以无登录shell的mira-cafe用户运行，监听127.0.0.1:3001。原daily-quest-cards.service仍active，127.0.0.1:8787保持。
@@ -58,3 +58,11 @@
 `73920f3`已发布，包SHA256为`5ecc3e0a94a020e2c58458d117158513969dec7b9dfb63ef530f5ea92ddb221c`。从保留的efa4008复制Linux依赖及素材后覆盖编译程序，Linux root与受限mira-cafe各30项检查通过，原子切换current并重启；nginx、凭据及其他站点配置未改，Mira与原daily-quest-cards服务均active。
 
 受控后台事件的真实API检查通过：1次DeepSeek、2次Qwen TTS均完成，2份回执200，后台15个原生音频片段开始/结束，无取消请求或音频关闭，完成剧情自动存档。没有原生OS后台长期播放或真人听感验收；检查已退出并关闭隔离浏览器。
+
+## 推进选项与自由输入更新
+
+当前5703005，更新包SHA256为4ee4cfc131f585a72d3843c7a880ff29b6e5e4e405afa6fe6729f788d70cd75d。复用73920f3的Linux依赖与素材，覆盖编译程序，Linux root与受限用户各30项通过，current原子切换并重启；旧版保留，原邀请哈希、存档签名、API key、nginx和其他服务配置未改。
+
+正式网页交替点击发亮选项与自由输入十轮到A结局，10次DeepSeek、20次Qwen TTS全部完成、24份回执200，0页面/语音错误或降级提示。四种尺寸无横向溢出，截图经检查，退出后停止收费检查。本地真实3001/无收费3002已加载新逻辑，临时3004关闭。全部用户反馈已记录AI_USAGE，不声称真人设备或听感已验收。
+
+发布后根站、www等7项既有URL状态、跳转及正文SHA256与基线一致，证据在.local/story-progression-root-regression.json。
