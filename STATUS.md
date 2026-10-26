@@ -1,6 +1,8 @@
 # 当前检查点 · 2026-10-26
 
-核心 MVP 已实现，已开放私密线上评审，线上应用5703005。本地新增剧情场景切换与电话式实时语音，尚未发布线上，见 [SCENE_TRANSITION](docs/SCENE_TRANSITION.md) 和 [VOICE_CALL](docs/VOICE_CALL.md)。当前统一验收见 [RELEASE_ACCEPTANCE](docs/RELEASE_ACCEPTANCE.md)。
+核心 MVP 已实现，已开放私密线上评审，线上应用5703005。本地新增剧情场景切换、电话式实时语音与流式文字，尚未发布线上，见 [SCENE_TRANSITION](docs/SCENE_TRANSITION.md)、[VOICE_CALL](docs/VOICE_CALL.md) 和 [STREAMING](docs/STREAMING.md)。当前统一验收见 [RELEASE_ACCEPTANCE](docs/RELEASE_ACCEPTANCE.md)。
+
+- 最新流式文字：DeepSeek增量到达页面，未确认文字不执行动作或写入存档，保持校验后按句TTS与呈现回执。37文件361项、两种构建和30项部署检查通过；本地SSE替身与合成PCM的完整A结局、打断、断流重试和四种尺寸通过，真实API新链路未复测。
 
 - 最新电话入口：点击后持续监听、约800ms停顿提交、持续插话自动打断，短附和有限过滤，红色电话挂断；原按住说话保留。切后台暂停收音但继续已有回复；断网需手动重连。36文件350项测试与类型/根构建通过，合成设备浏览器验证通过；真实麦克风/外放回声仍未验收。
 

@@ -1,5 +1,6 @@
 import { appPath } from './app-path';
-import { turnResponseSchema, type TurnRequest, type TurnResponse } from '../../shared/protocol';
+import { turnResponseSchema, turnStreamEventSchema, type TurnRequest, type TurnResponse } from '../../shared/protocol';
+import { sseData } from '../../shared/sse';
 import {
   presentationResponseSchema,
   type Presentation,
@@ -7,7 +8,7 @@ import {
 } from '../../shared/story';
 import { abortError } from '../../shared/async';
 export interface Transport {
-  turn(request: TurnRequest, signal: AbortSignal): Promise<TurnResponse>;
+  turn(request: TurnRequest, signal: AbortSignal, onText?: (text: string) => void): Promise<TurnResponse>;
   presented?(receipt: Presentation): Promise<PresentationResponse>;
   cancel(sessionId: string, throughTurnId: number): Promise<void>;
 }
@@ -63,7 +64,7 @@ export class HttpTransport implements Transport {
       throw new Error('这段对白暂时没能同步。请刷新，恢复上次保存的进度。');
     });
   }
-  async turn(request: TurnRequest, signal: AbortSignal) {
+  async turn(request: TurnRequest, signal: AbortSignal, onText?: (text: string) => void) {
     await this.controls;
     if (signal.aborted) throw abortError();
     if (this.unsynced.has(request.sessionId))
@@ -81,9 +82,24 @@ export class HttpTransport implements Transport {
       const response = await fetch(appPath('api/turn'), {
         method: 'POST',
         signal: controller.signal,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
         body: JSON.stringify(request),
       });
+      if (response.ok && response.headers.get('content-type')?.includes('text/event-stream')) {
+        if (!response.body) throw new Error('没有收到回复数据流，请重试。');
+        for await (const data of sseData(response.body, controller.signal)) {
+          const parsed = turnStreamEventSchema.safeParse(JSON.parse(data));
+          if (!parsed.success) throw new Error('角色回复格式异常，请重试。');
+          const event = parsed.data;
+          const turnId = event.type === 'reply' ? event.reply.turnId : event.turnId;
+          if (turnId !== request.turnId) throw new Error('收到不匹配的回复，请重试。');
+          if (signal.aborted) throw abortError();
+          if (event.type === 'text') onText?.(event.text);
+          if (event.type === 'error') throw new Error(event.error.message);
+          if (event.type === 'reply') return event.reply;
+        }
+        throw new Error('回复传输中断，请重试这一句。');
+      }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error?.message ?? '连接失败，请重试。');
       const parsed = turnResponseSchema.safeParse(data);

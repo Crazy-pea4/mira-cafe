@@ -15,7 +15,8 @@ import { withBasePath } from '../shared/base-path';
 import type { RequestAudit } from './request-audit';
 import { registerSpeech } from './speech-routes';
 import type { SpeechProvider } from './speech';
-import { cancelSchema, replySchema, turnRequestSchema } from '../shared/protocol';
+import { cancelSchema, replySchema, turnRequestSchema, type TurnStreamEvent } from '../shared/protocol';
+import { PassThrough } from 'node:stream';
 import { isAbort } from '../shared/async';
 import { withAbort } from '../shared/abortable';
 import { randomBytes } from 'node:crypto';
@@ -161,6 +162,18 @@ export function buildApp(
     const controller = new AbortController();
     session.active = controller;
     const unwatch = access.watch(request.miraSession, () => controller.abort());
+    const stream = request.headers.accept?.includes('text/event-stream') ? new PassThrough() : undefined;
+    const send = (event: TurnStreamEvent) => {
+      if (stream && !stream.destroyed && !stream.writableEnded)
+        stream.write('data: ' + JSON.stringify(event) + '\n\n');
+    };
+    const failed = (status: number, code: string, message: string) => {
+      if (stream) {
+        send({ type: 'error', turnId: input.turnId, error: { code, message } });
+        return reply;
+      }
+      return reply.code(status).send({ error: { code, message } });
+    };
     let timedOut = false;
     const timeout = setTimeout(() => {
       timedOut = true;
@@ -171,17 +184,30 @@ export function buildApp(
     };
     request.raw.on('aborted', disconnect);
     reply.raw.on('close', disconnect);
+    if (stream) {
+      reply
+        .type('text/event-stream; charset=utf-8')
+        .header('Cache-Control', 'no-cache, no-transform')
+        .header('X-Accel-Buffering', 'no')
+        .send(stream);
+      send({ type: 'start', turnId: input.turnId });
+    }
     try {
       const result = await withAbort(
         provider.reply(
           { ...input, history: session.story.history, storyContext: storyContext(session.story) },
           controller.signal,
+          undefined,
+          stream ? (text) => {
+            if (session.latest === input.turnId && !controller.signal.aborted)
+              send({ type: 'text', turnId: input.turnId, text: text.slice(0, 241) });
+          } : undefined,
         ),
         controller.signal,
       );
-      if (session.latest !== input.turnId) return stale();
+      if (session.latest !== input.turnId) return failed(409, 'STALE_TURN', '这轮对话已经结束。');
       if (timedOut) throw new ProviderError('TIMEOUT', '等待回复超时，请重试。');
-      if (controller.signal.aborted) return stale();
+      if (controller.signal.aborted) return failed(409, 'STALE_TURN', '这轮对话已经结束。');
       const checked = replySchema.safeParse(result);
       if (!checked.success) throw new ProviderError('INVALID_REPLY', '角色回复格式异常，请重试。');
       const violations = storyViolation(storyContext(session.story), checked.data, input.text);
@@ -189,27 +215,29 @@ export function buildApp(
         throw new ProviderError('INVALID_REPLY', '剧情没有衔接上，请换一句话继续。', violations);
       session.pending = prepareStory(session.story, input, checked.data);
       const { suggestions: _pendingSuggestions, ...visible } = session.pending.reply;
-      return { turnId: input.turnId, provider: provider.kind, ...visible };
+      const response = { turnId: input.turnId, provider: provider.kind, ...visible };
+      if (stream) {
+        send({ type: 'reply', reply: response });
+        return reply;
+      }
+      return response;
     } catch (error) {
       if (timedOut && session.latest === input.turnId)
-        return reply
-          .code(504)
-          .send({ error: { code: 'TIMEOUT', message: '等待回复超时，请重试。' } });
+        return failed(504, 'TIMEOUT', '等待回复超时，请重试。');
       if (isAbort(error) || controller.signal.aborted || session.latest !== input.turnId)
-        return stale();
+        return failed(409, 'STALE_TURN', '这轮对话已经结束。');
       const known =
         error instanceof ProviderError
           ? error
           : new ProviderError('UNAVAILABLE', '暂时无法连接角色，请重试。');
-      return reply
-        .code(known.code === 'TIMEOUT' ? 504 : 503)
-        .send({ error: { code: known.code, message: known.message } });
+      return failed(known.code === 'TIMEOUT' ? 504 : 503, known.code, known.message);
     } finally {
       unwatch();
       clearTimeout(timeout);
       request.raw.off('aborted', disconnect);
       reply.raw.off('close', disconnect);
       if (session.active === controller) session.active = undefined;
+      stream?.end();
     }
   });
   return app;

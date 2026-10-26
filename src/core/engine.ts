@@ -38,6 +38,7 @@ export interface Snapshot {
   status: CharacterStatus;
   turnId: number;
   subtitle: string;
+  streamingText: string;
   emotion: Emotion;
   action: Action;
   scene: Scene;
@@ -60,6 +61,7 @@ const INITIAL: Snapshot = {
   status: 'idle',
   turnId: 0,
   subtitle: STORY_OPENING,
+  streamingText: '',
   emotion: 'guarded',
   action: 'idle',
   scene: 'rain',
@@ -168,6 +170,7 @@ export class ConversationEngine {
       turnId: previous + 1,
       status: listening ? 'listening' : 'idle',
       subtitle: preserveSubtitle ? this.snapshot.subtitle : '',
+      streamingText: '',
       action: 'idle',
       error: '',
       notice: '',
@@ -198,6 +201,7 @@ export class ConversationEngine {
     let assistantEntry: History[number] | undefined;
     const heardSegments: Reply['segments'] = [];
     let presentedCount = 0;
+    let receiving = true;
     try {
       const parsed = turnResponseSchema.safeParse(
         await this.transport.turn(
@@ -210,14 +214,18 @@ export class ConversationEngine {
             ...(this.checkpoint ? { checkpoint: this.checkpoint } : {}),
           },
           signal,
+          (text) => {
+            if (current() && receiving) this.update({ streamingText: text });
+          },
         ),
       );
+      receiving = false;
       if (!parsed.success) throw new Error('角色回复格式异常，请重试。');
       const response = parsed.data;
       const replyNotice = response.notice === 'REPLY_TEXT_ONLY' ? REPLY_TEXT_ONLY_NOTICE : '';
       if (!current()) return;
       if (response.turnId !== turnId) throw new Error('收到不匹配的回复，请重试。');
-      this.update({ notice: replyNotice });
+      this.update({ notice: replyNotice, streamingText: this.snapshot.streamingText ? response.segments[0].text : '' });
       for (const unit of presentationUnits(response)) {
         if (!current()) return;
         const segment = response.segments[unit.segment];
@@ -226,6 +234,7 @@ export class ConversationEngine {
             status: 'narrating',
             presentation: 'none',
             subtitle: '',
+            streamingText: '',
             action: unit.cue.kind === 'practice' ? 'idle' : segment.action,
             propFocus:
               unit.cue.kind === 'photo-drift'
@@ -253,6 +262,7 @@ export class ConversationEngine {
               pendingAudio: false,
               status: 'speaking',
               subtitle: unit.text,
+              streamingText: '',
               emotion: segment.emotion,
               action: segment.action,
               ...(segment.scene ? { scene: segment.scene } : {}),
@@ -359,10 +369,12 @@ export class ConversationEngine {
         propFocus: 'none',
         status: 'error',
         subtitle: '',
+        streamingText: '',
         action: 'idle',
         error: error instanceof Error ? error.message : '连接失败，请重试。',
       });
     } finally {
+      receiving = false;
       // Pending/failed user turns were never committed; neither rapid input
       // nor an explicit retry inherits a phantom unanswered exchange.
       this.history = this.history.slice(-12);

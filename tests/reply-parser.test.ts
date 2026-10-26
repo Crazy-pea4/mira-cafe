@@ -221,7 +221,8 @@ describe('DeepSeek parser integration, fake HTTP only', () => {
       thinking: { type: 'disabled' },
       max_tokens: 650,
       response_format: { type: 'json_object' },
-      stream: false,
+      stream: true,
+      stream_options: { include_usage: true },
     });
     expect(body.messages[0].content).toContain('合计不超过120字');
     expect(body.messages[0].content).toContain('guarded/curious/relieved');

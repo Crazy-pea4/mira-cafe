@@ -78,6 +78,13 @@ export const turnResponseSchema = replySchema.extend({
   turnId: z.number().int().positive(),
   provider: z.enum(['mock', 'deepseek']),
 });
+export const turnStreamEventSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('start'), turnId: z.number().int().positive() }).strict(),
+  z.object({ type: z.literal('text'), turnId: z.number().int().positive(), text: z.string().max(241) }).strict(),
+  z.object({ type: z.literal('reply'), reply: turnResponseSchema }).strict(),
+  z.object({ type: z.literal('error'), turnId: z.number().int().positive(), error: z.object({ code: z.string().max(64), message: z.string().max(300) }).strict() }).strict(),
+]);
+export type TurnStreamEvent = z.infer<typeof turnStreamEventSchema>;
 export type Emotion = z.infer<typeof emotionSchema>;
 export type Action = z.infer<typeof actionSchema>;
 export type Scene = z.infer<typeof sceneSchema>;

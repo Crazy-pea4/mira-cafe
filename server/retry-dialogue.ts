@@ -7,18 +7,24 @@ const repairable = new Set(['INVALID_REPLY', 'EMPTY_REPLY', 'TRUNCATED_REPLY', '
 export function retryDialogue(provider: DialogueProvider): DialogueProvider {
   return {
     kind: provider.kind,
-    async reply(request, signal) {
+    async reply(request, signal, _repair, onText) {
       let issues: string[] = [];
       for (let attempt = 1; attempt <= 3; attempt++) {
         if (signal.aborted) throw abortError();
+        onText?.('');
+        let acceptingText = true;
         try {
           const reply = await withAbort(
-            provider.reply(request, signal, { attempt, issues }),
+            provider.reply(request, signal, { attempt, issues }, (text) => {
+              if (acceptingText && !signal.aborted) onText?.(text);
+            }),
             signal,
           );
+          acceptingText = false;
           if (signal.aborted) throw abortError();
           return reply;
         } catch (error) {
+          acceptingText = false;
           if (signal.aborted) throw abortError();
           if (!(error instanceof ProviderError) || !repairable.has(error.code)) throw error;
           if (attempt === 3)

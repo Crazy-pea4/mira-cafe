@@ -16,6 +16,7 @@ import { sanitizeValidationIssues } from './validation-feedback';
 import { buildDialogueMessages } from './dialogue-history';
 import { authorStory } from './story-author';
 import type { DiagnosticSink } from './reply-diagnostics';
+import { readDeepSeekStream } from './deepseek-stream';
 export class ProviderError extends Error {
   constructor(
     public code: 'TIMEOUT' | 'UNAVAILABLE' | ReplyFailure | 'NOT_CONFIGURED',
@@ -29,11 +30,22 @@ export type DialogueRequest = TurnRequest & { storyContext?: StoryContext };
 export type RepairContext = { attempt: number; issues: readonly string[] };
 export interface DialogueProvider {
   readonly kind: 'mock' | 'deepseek';
-  reply(request: DialogueRequest, signal: AbortSignal, repair?: RepairContext): Promise<Reply>;
+  reply(request: DialogueRequest, signal: AbortSignal, repair?: RepairContext, onText?: (text: string) => void): Promise<Reply>;
 }
 export class MockProvider implements DialogueProvider {
   readonly kind = 'mock' as const;
-  async reply(request: DialogueRequest, signal: AbortSignal): Promise<Reply> {
+  async reply(request: DialogueRequest, signal: AbortSignal, _repair?: RepairContext, onText?: (text: string) => void): Promise<Reply> {
+    const reply = await this.generateReply(request, signal);
+    if (onText) {
+      const chars = Array.from(reply.segments.map((segment) => segment.text).join('\n'));
+      for (let end = 4; end < chars.length + 4; end += 4) {
+        await delay(25, signal);
+        onText(chars.slice(0, end).join(''));
+      }
+    }
+    return reply;
+  }
+  private async generateReply(request: DialogueRequest, signal: AbortSignal): Promise<Reply> {
     await delay(request.fault === 'slow' ? 3500 : 650, signal);
     if (request.fault === 'timeout')
       throw new ProviderError('TIMEOUT', '模拟模型超时。可以重试这一句。');
@@ -160,6 +172,7 @@ export class DeepSeekProvider implements DialogueProvider {
     request: DialogueRequest,
     signal: AbortSignal,
     repair?: RepairContext,
+    onText?: (text: string) => void,
   ): Promise<Reply> {
     if (!this.apiKey)
       throw new ProviderError(
@@ -203,14 +216,18 @@ export class DeepSeekProvider implements DialogueProvider {
         response_format: { type: 'json_object' },
         thinking: { type: 'disabled' },
         max_tokens: 650,
-        stream: false,
+        stream: true,
+        stream_options: { include_usage: true },
       }),
     });
     if (!response.ok) throw new ProviderError('UNAVAILABLE', '文字服务暂时不可用，请稍后重试。');
     let data: unknown;
     try {
-      data = await response.json();
-    } catch {
+      data = response.headers.get('content-type')?.includes('text/event-stream')
+        ? await readDeepSeekStream(response, signal, onText)
+        : await response.json();
+    } catch (error) {
+      if (signal.aborted || error instanceof ProviderError) throw error;
       try {
         diagnose({
           event: 'reply-format',

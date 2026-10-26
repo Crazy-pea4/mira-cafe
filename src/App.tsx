@@ -74,7 +74,7 @@ export function App() {
   }, []);
   useEffect(() => {
     if (streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight;
-  }, [state.turnId, state.subtitle, state.narration, state.status]);
+  }, [state.turnId, state.subtitle, state.streamingText, state.narration, state.status]);
   const [text, setText] = useState('');
   const [inputSource, setInputSource] = useState<InputSource>('text');
   const [backgroundReady, setBackgroundReady] = useState(false);
@@ -286,7 +286,7 @@ export function App() {
               </div>
               <span className={`state-badge ${state.status}`} data-testid="state">
                 <i />
-                {state.pendingAudio ? '正在准备语音' : STATUS[state.status]}
+                {state.pendingAudio ? '正在准备语音' : state.streamingText ? '正在回应' : STATUS[state.status]}
               </span>
             </div>
             <div className="subtitle-box">
@@ -298,12 +298,12 @@ export function App() {
                   </button>
                 </div>
               ) : (
-                <p aria-live="polite" data-testid="subtitle">
+                <p aria-live="polite" aria-busy={!!state.streamingText} data-testid="subtitle" data-streaming={!!state.streamingText}>
                   {state.status === 'listening'
                     ? input.mode === 'live'
                       ? '我在听。'
                       : '松开后，就从这个话题聊起吧。'
-                    : state.subtitle || (
+                    : state.streamingText || state.subtitle || (
                         <span className="dialogue-placeholder">
                           {state.pendingAudio
                             ? '正在准备语音…'
