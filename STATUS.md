@@ -1,5 +1,7 @@
 # 当前检查点 · 2026-10-26
 
+- 按用户最新决定增加ComfyUI服务端适配层与离线Mock示例，主应用和服务器均不启用生图；不安装Docker、ComfyUI或模型，未真实联调。新增18项适配回归、全量38文件379项、两种构建及30项部署检查通过。代码与接入边界见 [COMFYUI_ADAPTER](docs/COMFYUI_ADAPTER.md)。
+
 核心 MVP 已实现，已开放私密线上评审，线上应用5703005。本地新增剧情场景切换、电话式实时语音与流式文字，尚未发布线上，见 [SCENE_TRANSITION](docs/SCENE_TRANSITION.md)、[VOICE_CALL](docs/VOICE_CALL.md) 和 [STREAMING](docs/STREAMING.md)。当前统一验收见 [RELEASE_ACCEPTANCE](docs/RELEASE_ACCEPTANCE.md)。
 
 - 最新流式文字：DeepSeek增量到达页面，未确认文字不执行动作或写入存档，保持校验后按句TTS与呈现回执。37文件361项、两种构建和30项部署检查通过；本地SSE替身与合成PCM的完整A结局、打断、断流重试和四种尺寸通过，真实API新链路未复测。

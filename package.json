@@ -17,6 +17,7 @@
     "build": "npm run typecheck && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "demo:media": "node --import tsx scripts/media-adapter-demo.ts",
     "check": "npm run typecheck && npm test && npm run build",
     "start:configured": "node --env-file=.env --import tsx server/index.ts",
     "dev:configured": "node --env-file=.env scripts/dev.mjs",
