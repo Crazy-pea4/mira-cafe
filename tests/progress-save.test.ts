@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { buildApp } from '../server/app';
 import { mockStoryReply } from '../server/story-mock';
 import { loadStorySaveKey, storySaves } from '../server/story-save';
@@ -264,6 +266,39 @@ describe('signed story checkpoints', () => {
       expect(readFileSync(path, 'utf8')).toBe(key);
       expect(statSync(path).mode & 0o777).toBe(0o600);
     } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+  it('uses one complete key when local live and mock processes start together', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'mira-save-race-'));
+    const path = join(directory, 'story-save.key');
+    const children = Array.from({ length: 4 }, () => {
+      const child = spawn(process.execPath, [
+        '--import',
+        'tsx',
+        '--input-type=module',
+        '-e',
+        `import { loadStorySaveKey } from './server/story-save.ts'; process.stdout.write('ready'); process.stdin.once('data', () => { process.stdout.write(loadStorySaveKey(process.argv[1])); process.exit(0); });`,
+        path,
+      ]);
+      const ready = once(child.stdout, 'data');
+      let output = '';
+      child.stdout.on('data', (chunk) => {
+        output += chunk;
+      });
+      return { child, ready, exited: once(child, 'exit'), output: () => output };
+    });
+    try {
+      await Promise.all(children.map((c) => c.ready));
+      for (const { child } of children) child.stdin.end('start');
+      expect(await Promise.all(children.map((c) => c.exited))).toEqual(
+        Array.from({ length: 4 }, () => [0, null]),
+      );
+      const key = readFileSync(path, 'utf8');
+      expect(key).toMatch(/^[a-f0-9]{64}$/);
+      for (const c of children) expect(c.output()).toBe('ready' + key);
+    } finally {
+      for (const { child } of children) if (child.exitCode === null) child.kill();
       rmSync(directory, { recursive: true, force: true });
     }
   });

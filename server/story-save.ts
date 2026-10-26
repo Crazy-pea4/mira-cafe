@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { linkSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { z } from 'zod';
 import { historySchema } from '../shared/protocol';
@@ -23,8 +23,20 @@ export function loadStorySaveKey(path: string): string {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     const key = randomBytes(32).toString('hex');
-    writeFileSync(path, key, { mode: 0o600, flag: 'wx' });
-    return key;
+    const temporary = path + '.' + randomBytes(8).toString('hex');
+    writeFileSync(temporary, key, { mode: 0o600, flag: 'wx' });
+    try {
+      // Link a complete file atomically. Concurrent live/mock startup may share
+      // this state directory; neither process can observe a half-written key.
+      try {
+        linkSync(temporary, path);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      }
+      return readFileSync(path, 'utf8');
+    } finally {
+      rmSync(temporary);
+    }
   }
 }
 
