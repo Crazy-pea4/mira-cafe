@@ -1,8 +1,10 @@
-# 当前检查点 · 2026-10-26
+# 当前检查点 · 2026-10-27
+
+- 本地已迁移至Docker Compose，统一入口为http://127.0.0.1:5173/，当前使用现有密钥运行真实配置，默认命令仍可无密钥启动Mock；旧宿主机3001/3002进程已退出。容器内379项测试、类型/构建及30项部署检查通过，Mock完整A结局、转场、热更新、容器重建后签名剧情恢复与四尺寸通过。真实文字探针仅1次DeepSeek、13次增量事件，未新增ASR/TTS。服务器仍按原Node/systemd/nginx部署，本次没有更改线上。见 [DOCKER](docs/DOCKER.md)。
 
 - 最新线上版本 `31bdece`：发布前38文件379项测试、本地30项部署检查、Linux root与受限账号各30项通过；真实线上新增3次DeepSeek、1次合成音频ASR、4次TTS，三次SSE回复、56次文字变化及4份回执200。电话自动提交一轮、播放中点击打断与后续对话通过，登录/刷新/退出和四尺寸通过，原站7条路径摘要一致。ComfyUI保持关闭，未安装Docker。发布与检查记录见 [DEPLOYMENT_STATUS](docs/DEPLOYMENT_STATUS.md)。
 
-- 按用户最新决定增加ComfyUI服务端适配层与离线Mock示例，主应用和服务器均不启用生图；不安装Docker、ComfyUI或模型，未真实联调。新增18项适配回归、全量38文件379项、两种构建及30项部署检查通过。代码与接入边界见 [COMFYUI_ADAPTER](docs/COMFYUI_ADAPTER.md)。
+- ComfyUI继续仅提供服务端适配层与离线Mock示例，主应用和服务器均不启用生图；不另装ComfyUI、模型或GPU服务，未真实联调。新增18项适配回归、全量38文件379项、两种构建及30项部署检查通过。代码与接入边界见 [COMFYUI_ADAPTER](docs/COMFYUI_ADAPTER.md)。
 
 核心 MVP 已实现，已开放私密线上评审，线上应用为 `31bdece`，已包含剧情场景切换、电话式实时语音与流式文字，见 [SCENE_TRANSITION](docs/SCENE_TRANSITION.md)、[VOICE_CALL](docs/VOICE_CALL.md) 和 [STREAMING](docs/STREAMING.md)。当前统一验收见 [RELEASE_ACCEPTANCE](docs/RELEASE_ACCEPTANCE.md)。
 

@@ -6,17 +6,25 @@
 
 ## 启动与体验
 
-建议 Node 24，支持 Node 22.12+ 的 22 系列、24 系列或 26+。不需要数据库、Docker、账号或私人 API key。
+本地默认使用 Docker Compose，宿主机无需安装 Node.js/npm，不需要数据库、账号或私人 API key：
 
 ```sh
-npm ci --ignore-scripts && npm run dev
+docker compose up --build -d --wait
 ```
 
-打开 http://127.0.0.1:5173/，API 在本机 3001。已有进程占用端口时先关闭相应旧实例。也可 `npm run build && npm start` 后打开 http://127.0.0.1:3001/。
+打开 [http://127.0.0.1:5173/](http://127.0.0.1:5173/)。Vite和Fastify在同一开发容器内运行并支持热更新，HTTP及WebSocket由Vite代理；后端3001端口不发布到宿主机。真实服务、状态卷和容器检查见 [本地Docker说明](docs/DOCKER.md)。
+
+已有`.env`密钥时，明确启用真实DeepSeek/Qwen：
+
+```sh
+docker compose -f compose.yaml -f compose.live.yaml up --build -d --wait
+```
+
+保留Node直接启动用于诊断：先用`docker compose down`释放端口；建议Node 24，支持22.12+的22系列、24系列或26+，执行`npm ci --ignore-scripts && npm run dev`，也可`npm run build && npm start`。云服务器仍按Node/systemd/nginx部署，不使用Docker。
 
 没有配置时自动进入标注清楚的“演示模式”。文字输入、三个回应建议、完整剧情、角色状态和打断均可体验。“体验对白”发送示例，不使用麦克风。演示朗读使用浏览器中文声音；没有声音时保留字幕。
 
-本机现有入口：[真实配置版本](http://127.0.0.1:3001/) / [无收费 Mock 版本](http://127.0.0.1:3002/)。线上私密评审目标为 https://iamm.xyz/mira ，实时开放状态和版本见 [部署状态](docs/DEPLOYMENT_STATUS.md)。
+本地统一入口为 [http://127.0.0.1:5173/](http://127.0.0.1:5173/)，模式由上述Compose命令选择；切回默认命令即可运行无收费Mock。线上私密评审仍为 [https://iamm.xyz/mira](https://iamm.xyz/mira)，实时开放状态和版本见 [部署状态](docs/DEPLOYMENT_STATUS.md)。
 
 ## 可玩内容
 
@@ -32,7 +40,7 @@ npm ci --ignore-scripts && npm run dev
 
 Live2D 取舍（2026-10-26）：用户决定本次 Demo 暂不接入 Live2D，这是演示范围与投入的主动取舍，并非技术不可行。现有角色状态、情绪动作、TTS 和打断链路可作为接入基础；但保留 Mira 外观需要额外完成分层素材、Cubism 模型绑定、动作制作及移动端验证，复杂度超出当前短篇演示的需要。当前保留上述基础角色动画；后续需要提升连续表演时，再评估 Live2D。此项目前仅完成方案评估，未进行实际接入验证。
 
-ComfyUI按用户决定仅预留服务端接口适配层：支持工作流参数绑定、提交、状态查询、图片下载、超时与取消等待；可删除指定排队任务，运行中不冒充已停止。`npm run demo:media`可离线验证Mock接口，不安装ComfyUI、Docker或模型。当前聊天页面未接入生图，服务器不启用；示例工作流含模型占位符，尚未真实联调，不标记为已完成动态生图或ComfyUI实操验收。配置、代码入口和后续步骤见 [ComfyUI适配说明](docs/COMFYUI_ADAPTER.md)。
+ComfyUI按用户决定仅预留服务端接口适配层：支持工作流参数绑定、提交、状态查询、图片下载、超时与取消等待；可删除指定排队任务，运行中不冒充已停止。`npm run demo:media`可离线验证Mock接口，不另装ComfyUI、模型或GPU服务。当前聊天页面未接入生图，服务器不启用；示例工作流含模型占位符，尚未真实联调，不标记为已完成动态生图或ComfyUI实操验收。配置、代码入口和后续步骤见 [ComfyUI适配说明](docs/COMFYUI_ADAPTER.md)。
 
 ## 系统结构与取舍
 
@@ -44,6 +52,12 @@ ComfyUI按用户决定仅预留服务端接口适配层：支持工作流参数�
 | 文字 | DeepSeek / Mock              | 自由对话、情绪动作与剧情提议           |
 | 语音 | Qwen 实时 ASR/TTS            | 16k PCM 输入、24k PCM 输出             |
 | 剧情 | 模型提议 + 本地作者规则      | 前置条件、关键事实兜底、结局和道具演出 |
+| 状态 | 内存会话、localStorage、文件 | 签名剧情检查点、浏览器续接和尽力统计；未使用数据库或Redis |
+| 表演 | PNG关键帧、局部贴图与CSS动画 | 表情、姿态、眨眼、嘴型和背景转场；未接入Live2D |
+| 通信 | HTTP/SSE、WebSocket、Web Audio/AudioWorklet | 增量文字、语音代理、PCM采集与播放时钟 |
+| 媒体扩展 | 独立ComfyUI HTTP适配器 | 仅预留协议，主应用不启用，不部署GPU服务 |
+| 运行 | 本地Docker Compose；线上Node/systemd/nginx | 本地Node 24开发环境，线上继续运行Node编译产物 |
+| 验证 | Vitest、TypeScript、Playwright | 协议与取消回归、类型/构建、浏览器流程与布局 |
 
 `src/core/engine.ts` 管理轮次与演出；`audio.ts`、`pcm-playback.ts` 管理播放器；`microphone.ts`、`voice-input.ts` 管理采集与识别；`src/StoryTimeline.tsx` 只读取已呈现剧情。
 

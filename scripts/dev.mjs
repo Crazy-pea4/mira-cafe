@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process';
+const devHost = process.env.MIRA_DEV_HOST ?? '127.0.0.1';
 const processes = [
   spawn(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'watch', 'server/index.ts'], {
     stdio: 'inherit',
   }),
-  spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1'], {
+  spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', devHost], {
     stdio: 'inherit',
   }),
 ];

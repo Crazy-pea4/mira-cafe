@@ -1,0 +1,18 @@
+# Explicit opt-in. Compose reads these selected values from the local .env;
+# no credential file is copied into the image or mounted into the frontend.
+services:
+  app:
+    environment:
+      MIRA_ENABLE_LIVE_APIS: "true"
+      MIRA_PROVIDER: deepseek
+      MIRA_SPEECH_PROVIDER: qwen
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:?Configure DEEPSEEK_API_KEY in .env}"
+      DEEPSEEK_MODEL: "${DEEPSEEK_MODEL:-deepseek-flash}"
+      DASHSCOPE_API_KEY: "${DASHSCOPE_API_KEY:?Configure DASHSCOPE_API_KEY in .env}"
+      DASHSCOPE_REGION: "${DASHSCOPE_REGION:-cn-beijing}"
+      DASHSCOPE_WORKSPACE_ID: "${DASHSCOPE_WORKSPACE_ID:-}"
+      QWEN_ASR_ENDPOINT: "${QWEN_ASR_ENDPOINT:-wss://dashscope.aliyuncs.com/api-ws/v1/realtime}"
+      QWEN_TTS_ENDPOINT: "${QWEN_TTS_ENDPOINT:-wss://dashscope.aliyuncs.com/api-ws/v1/realtime}"
+      QWEN_ASR_MODEL: "${QWEN_ASR_MODEL:-qwen3-asr-flash-realtime}"
+      QWEN_TTS_MODEL: "${QWEN_TTS_MODEL:-qwen3-tts-flash-realtime}"
+      QWEN_TTS_VOICE: "${QWEN_TTS_VOICE:-Chelsie}"

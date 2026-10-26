@@ -1,0 +1,55 @@
+name: mira-cafe
+
+services:
+  app:
+    image: mira-cafe-local:dev
+    build:
+      context: .
+    init: true
+    ports:
+      - "127.0.0.1:${MIRA_DOCKER_PORT:-5173}:5173"
+    environment:
+      PORT: "3001"
+      MIRA_DEV_HOST: 0.0.0.0
+      MIRA_BASE_PATH: ""
+      MIRA_PUBLIC_ORIGIN: ""
+      MIRA_AUTH_REQUIRED: "false"
+      MIRA_STATIC_DIR: /app/dist
+      MIRA_STATE_DIR: /var/lib/mira-cafe
+      MIRA_ENABLE_LIVE_APIS: "false"
+      MIRA_PROVIDER: mock
+      MIRA_SPEECH_PROVIDER: mock
+      MIRA_MEDIA_PROVIDER: disabled
+      MIRA_ENABLE_MEDIA_APIS: "false"
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "300"
+    volumes:
+      - ./src:/app/src:ro
+      - ./server:/app/server:ro
+      - ./shared:/app/shared:ro
+      - ./public:/app/public:ro
+      - ./scripts:/app/scripts:ro
+      - ./tests:/app/tests:ro
+      - ./workflows:/app/workflows:ro
+      - ./package.json:/app/package.json:ro
+      - ./package-lock.json:/app/package-lock.json:ro
+      - ./index.html:/app/index.html:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+      - ./vite.config.ts:/app/vite.config.ts:ro
+      - ./vite.server.config.ts:/app/vite.server.config.ts:ro
+      - ./vitest.config.ts:/app/vitest.config.ts:ro
+      - state:/var/lib/mira-cafe
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/api/health').then(r => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    stop_grace_period: 10s
+
+volumes:
+  state:

@@ -17,6 +17,8 @@
 
 ## 构建和更新
 
+本地开发使用[Docker Compose](DOCKER.md)，服务器仍按本页Node/systemd/nginx流程部署。可在本机Node环境构建，也可按Docker说明在容器内构建并导出build目录；不把开发容器发布到服务器。
+
 先运行 `npm run check`、`npm run build:deploy`、`npm run check:deploy`。依项目约定不主动执行格式化或格式检查。根路径dist和/mira的build/client彼此独立，服务端产物为build/server/index.js。
 
 发布包仅包含build、package.json、package-lock.json及必要的无秘密检查工具。经既有Workbench上传，在全新release目录用`tar --no-same-owner`解包，规范目录755/静态文件644，再使用官方源执行：

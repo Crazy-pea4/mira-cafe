@@ -1,0 +1,27 @@
+# Allowlist: private files never enter the build context or image.
+**
+!Dockerfile
+!package.json
+!package-lock.json
+!index.html
+!tsconfig.json
+!vite.config.ts
+!vite.server.config.ts
+!vitest.config.ts
+!src/
+!src/**
+!server/
+!server/**
+!shared/
+!shared/**
+!public/
+!public/**
+!scripts/
+!scripts/**
+!tests/
+!tests/**
+!workflows/
+!workflows/**
+**/.env*
+**/.DS_Store
+**/*.log

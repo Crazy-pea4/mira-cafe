@@ -1,5 +1,7 @@
 # 本机真实服务配置（已完成三次限量连通测试）
 
+本地当前使用[Docker Compose](DOCKER.md)。已有`.env`时执行`docker compose -f compose.yaml -f compose.live.yaml up --build -d --wait`，打开[本机入口](http://127.0.0.1:5173/)；覆盖文件明确启用真实服务并只传入白名单配置，无需在宿主机启动Node。下方保留Node直接运行的诊断步骤及早期连通记录，历史次数不代表当前累计用量。按住说话与[连续通话](VOICE_CALL.md)是两个入口，下方录音操作主要描述按住路径。
+
 未配置时使用 Mock；产品回复默认有声，首次用户交互解锁，页面加载不自动朗读。用户自行配置密钥后，已明确授权并完成一次 DeepSeek、一次 Chelsie TTS 和一次合成音频 ASR，共三次；没有录音、播放或重试。当前本机进程已通过启动环境选择真实模式，等待用户操作。用户已撤销产品本地金额/次数限制；真实请求按云服务实际用量计费，不自动充值。Agent自动测试仍须另有有界授权。详情、费用估算及接手步骤见 [LIVE_SMOKE](LIVE_SMOKE.md)。
 
 ## 最少配置步骤
@@ -8,7 +10,7 @@
 2. 自行填写下表变量。不要把密钥粘贴进聊天、截图、前端代码或任何 VITE_ 变量。.env / .env.* 已被 Git 忽略（示例除外）。可自行执行 `chmod 600 .env` 限制文件读取。
 3. 示例已预填北京区域和官方兼容端点。自行填写 DEEPSEEK_API_KEY 与北京 DASHSCOPE_API_KEY；如账号要求工作空间，填写 DASHSCOPE_WORKSPACE_ID 并将 ASR 端点换成自己的北京工作空间域名。暂时保持 MIRA_ENABLE_LIVE_APIS=false，即可保存配置而不发起收费请求。
 4. 真正联调前核对账号价格/用量，再设置 MIRA_ENABLE_LIVE_APIS=true，按需设 MIRA_PROVIDER=deepseek、MIRA_SPEECH_PROVIDER=qwen。录音仍须明确点击并授权；声音随正常对话回复播放。本轮 agent 不录音、不播放、不增加付费测试。
-5. 停止原有本项目服务，执行 `npm run build && npm run start:configured`，仍打开 http://127.0.0.1:3001/。普通 `npm start` 不加载 .env；开发时使用 `npm run dev:configured`。不要同时启动两个 API 服务。
+5. 如需Node诊断，先停止本地Docker和旧服务，执行 `npm run build && npm run start:configured`，打开 http://127.0.0.1:3001/。普通 `npm start` 不加载 .env；开发时使用 `npm run dev:configured`。正常Docker开发按上方命令运行，不另启动宿主机API。
 
 | 变量                                  | 作用                                                                         |
 | ------------------------------------- | ---------------------------------------------------------------------------- |
