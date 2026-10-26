@@ -67,6 +67,7 @@ export const turnRequestSchema = z
     turnId: z.number().int().positive(),
     text: z.string().trim().min(1).max(800),
     history: z.array(historySchema).max(12).default([]),
+    checkpoint: z.string().min(1).max(40000).optional(),
     fault: z.enum(['none', 'slow', 'timeout', 'error']).default('none'),
   })
   .strict();

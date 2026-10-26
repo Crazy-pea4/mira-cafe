@@ -11,6 +11,7 @@ import { voiceButtonView } from './VoiceButton';
 import { LocalSpeechTransport } from './core/speech-transport';
 import { ConversationEngine } from './core/engine';
 import { HttpTransport } from './core/transport';
+import { LocalProgressStorage } from './core/progress-storage';
 import { Character } from './Character';
 import { Narrative } from './Narrative';
 import { Suggestions } from './Suggestions';
@@ -30,7 +31,18 @@ export function App() {
     const audio = new SceneAudio(),
       voice = new VoiceInput(new LocalSpeechTransport());
     const entry = new VoiceEntry(voice, prepareMicrophone);
-    return { engine: new ConversationEngine(new HttpTransport(), audio), audio, entry };
+    return {
+      engine: new ConversationEngine(
+        new HttpTransport(),
+        audio,
+        undefined,
+        undefined,
+        undefined,
+        new LocalProgressStorage(),
+      ),
+      audio,
+      entry,
+    };
   });
   const state = useSyncExternalStore(engine.subscribe, engine.getSnapshot, engine.getSnapshot);
   const input = useSyncExternalStore(entry.subscribe, entry.getSnapshot, entry.getSnapshot);
@@ -133,6 +145,19 @@ export function App() {
         </a>
         <div className="top-actions">
           <ModeBadge provider={provider} />
+          <button
+            className="reset-story leave-cafe"
+            type="button"
+            onClick={() => {
+              if (!window.confirm('重置剧情并清除本机存档？将从咖啡馆开场重新开始。')) return;
+              entry.cancel();
+              engine.reset();
+              setText('');
+              setInputSource('text');
+            }}
+          >
+            重置剧情
+          </button>
           {authentication && (
             <form
               action={appPath('auth/logout')}
@@ -277,6 +302,11 @@ export function App() {
             {audioNotice && !state.notice.includes(audioNotice) && (
               <div className="notice" role="status">
                 {audioNotice}
+              </div>
+            )}
+            {state.saveNotice && (
+              <div className="notice" role="status">
+                {state.saveNotice}
               </div>
             )}
           </div>

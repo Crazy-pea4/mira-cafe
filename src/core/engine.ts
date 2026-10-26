@@ -23,6 +23,7 @@ import {
   type PropFocus,
 } from '../../shared/stage';
 import type { Transport } from './transport';
+import type { ProgressStorage } from './progress-storage';
 export interface Snapshot {
   propFocus: PropFocus;
   suggestions: string[];
@@ -41,8 +42,10 @@ export interface Snapshot {
   notice: string;
   lastInput: string;
   completed: number;
+  saveNotice: string;
 }
 const INITIAL: Snapshot = {
+  story: undefined,
   propFocus: 'none',
   narration: OPENING_NARRATION,
   stageProps: { ...INITIAL_PROPS },
@@ -59,6 +62,7 @@ const INITIAL: Snapshot = {
   notice: '',
   lastInput: '',
   completed: 0,
+  saveNotice: '',
 };
 export class ConversationEngine {
   private snapshot: Snapshot = { ...INITIAL };
@@ -66,13 +70,52 @@ export class ConversationEngine {
   private controller?: AbortController;
   private history: History = [];
   private committedProps: StageProps = { ...INITIAL_PROPS };
+  private checkpoint?: string;
   constructor(
     private transport: Transport,
     private audio: AudioPlayer,
     public sessionId: string = crypto.randomUUID(),
     private fallbackMs = (text: string) => Math.max(1800, text.length * 110),
     private narrationMs = (text: string) => Math.max(1400, Math.min(5000, text.length * 85)),
-  ) {}
+    private saves?: ProgressStorage,
+  ) {
+    try {
+      const saved = saves?.load();
+      if (saved) {
+        this.checkpoint = saved.checkpoint;
+        this.committedProps = { ...saved.view.stageProps };
+        this.snapshot = { ...INITIAL, ...saved.view, notice: '已恢复上次的剧情，接着聊吧。' };
+      }
+    } catch {
+      this.snapshot = { ...INITIAL, saveNotice: '无法读取本机存档，已回到开场。' };
+    }
+  }
+  private saveProgress() {
+    if (!this.saves || !this.checkpoint || !this.snapshot.story) return;
+    const { story, suggestions, narration, subtitle, emotion, scene, photo, lastInput, completed } =
+      this.snapshot;
+    try {
+      this.saves.save({
+        version: 1,
+        checkpoint: this.checkpoint,
+        view: {
+          story,
+          suggestions: [...suggestions],
+          narration,
+          subtitle,
+          emotion,
+          scene,
+          photo,
+          lastInput,
+          completed,
+          stageProps: { ...this.committedProps },
+        },
+      });
+      if (this.snapshot.saveNotice) this.update({ saveNotice: '' });
+    } catch {
+      this.update({ saveNotice: '浏览器未能保存剧情，刷新可能丢失进度。' });
+    }
+  }
   getSnapshot = () => this.snapshot;
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
@@ -141,7 +184,14 @@ export class ConversationEngine {
     try {
       const parsed = turnResponseSchema.safeParse(
         await this.transport.turn(
-          { sessionId: this.sessionId, turnId, text: trimmed, history: priorHistory, fault },
+          {
+            sessionId: this.sessionId,
+            turnId,
+            text: trimmed,
+            history: priorHistory,
+            fault,
+            ...(this.checkpoint ? { checkpoint: this.checkpoint } : {}),
+          },
           signal,
         ),
       );
@@ -233,11 +283,14 @@ export class ConversationEngine {
               turnId,
               through: presentedCount,
             });
-            if (current())
+            if (current()) {
               this.update({
                 story: receipt.story,
                 ...(receipt.suggestions ? { suggestions: [...receipt.suggestions] } : {}),
               });
+              this.checkpoint = receipt.checkpoint;
+              this.saveProgress();
+            }
           } catch (error) {
             if (current())
               this.update({
@@ -251,7 +304,7 @@ export class ConversationEngine {
           }
         }
       }
-      if (current())
+      if (current()) {
         this.update({
           ...(!this.transport.presented && response.suggestions
             ? { suggestions: [...response.suggestions] }
@@ -261,6 +314,8 @@ export class ConversationEngine {
           action: 'idle',
           completed: this.snapshot.completed + 1,
         });
+        this.saveProgress();
+      }
     } catch (error) {
       if (!current() || isAbort(error)) return;
       this.update({
@@ -282,10 +337,16 @@ export class ConversationEngine {
   }
   reset() {
     this.interrupt();
+    this.checkpoint = undefined;
     this.sessionId = crypto.randomUUID();
     this.history = [];
     this.committedProps = { ...INITIAL_PROPS };
     this.update({ ...INITIAL, turnId: this.snapshot.turnId });
+    try {
+      this.saves?.clear();
+    } catch {
+      this.update({ saveNotice: '无法清除本机存档，请检查浏览器存储权限。' });
+    }
   }
   dispose() {
     this.interrupt();

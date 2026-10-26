@@ -11,6 +11,7 @@ import { auditDialogue, auditSpeech } from './audit-providers';
 import { logFacts } from './safe-log';
 import { retryDialogue } from './retry-dialogue';
 import { writeReplyDiagnostic } from './reply-diagnostics';
+import { loadStorySaveKey } from './story-save';
 // .env is loaded only by the separate, explicitly selected start:configured command.
 const config = resolveConfig(process.env);
 const deployment = resolveDeployment(process.env);
@@ -33,7 +34,9 @@ const provider = config.deepseek
     )
   : new MockProvider();
 const speech = config.qwen ? auditSpeech(new QwenSpeechProvider(config.qwen), audit) : undefined;
-const app = buildApp(provider, 18000, speech, audit, deployment);
+const saveKey =
+  deployment.auth?.passwordHash ?? loadStorySaveKey(resolve(stateDir, 'story-save.key'));
+const app = buildApp(provider, 18000, speech, audit, deployment, saveKey);
 const dist = resolve(process.env.MIRA_STATIC_DIR ?? 'dist');
 if (existsSync(dist)) await registerWeb(app, dist, deployment.basePath);
 else if (deployment.publicOrigin) throw new Error('Deployment client build is missing');

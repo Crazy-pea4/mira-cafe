@@ -458,6 +458,18 @@ body,
   font-size: 11px;
   backdrop-filter: blur(5px);
 }
+.reset-story {
+  white-space: nowrap;
+}
+@media (max-width: 520px) {
+  .app .top-actions {
+    gap: 6px;
+  }
+  .top-actions .leave-cafe {
+    padding: 8px;
+    font-size: 10px;
+  }
+}
 
 /* Keep the held pointer over the same button as privacy/error text changes. */
 .interaction .voice-help {

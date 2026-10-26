@@ -13,7 +13,7 @@ export interface Transport {
 }
 export class HttpTransport implements Transport {
   private controls: Promise<void> = Promise.resolve();
-  private unsynced = false;
+  private unsynced = new Set<string>();
   private enqueue<T>(work: () => Promise<T>): Promise<T> {
     const result = this.controls.then(work);
     this.controls = result.then(
@@ -54,19 +54,20 @@ export class HttpTransport implements Transport {
           return parsed.data;
         } catch {
           if (retryable && attempt === 0) continue;
-          this.unsynced = true;
-          throw new Error('这段对白暂时没能同步。请刷新，从这一晚重新开始。');
+          this.unsynced.add(receipt.sessionId);
+          throw new Error('这段对白暂时没能同步。请刷新，恢复上次保存的进度。');
         } finally {
           clearTimeout(timer);
         }
       }
-      throw new Error('这段对白暂时没能同步。请刷新，从这一晚重新开始。');
+      throw new Error('这段对白暂时没能同步。请刷新，恢复上次保存的进度。');
     });
   }
   async turn(request: TurnRequest, signal: AbortSignal) {
     await this.controls;
     if (signal.aborted) throw abortError();
-    if (this.unsynced) throw new Error('这段对白暂时没能同步。请刷新，从这一晚重新开始。');
+    if (this.unsynced.has(request.sessionId))
+      throw new Error('这段对白暂时没能同步。请刷新，恢复上次保存的进度。');
     const controller = new AbortController();
     const cancel = () => controller.abort();
     signal.addEventListener('abort', cancel, { once: true });

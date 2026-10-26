@@ -66,6 +66,7 @@ export const presentationResponseSchema = z
     turnId: z.number().int().positive(),
     through: z.number().int().min(1).max(540),
     story: storyViewSchema,
+    checkpoint: z.string().min(1).max(40000).optional(),
     suggestions: suggestionSchema.optional(),
   })
   .strict();

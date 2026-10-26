@@ -18,11 +18,14 @@ import type { SpeechProvider } from './speech';
 import { cancelSchema, replySchema, turnRequestSchema } from '../shared/protocol';
 import { isAbort } from '../shared/async';
 import { withAbort } from '../shared/abortable';
+import { randomBytes } from 'node:crypto';
+import { storySaves } from './story-save';
 import { type DialogueProvider, MockProvider, ProviderError } from './providers';
 type Session = {
   owner: string | null;
   latest: number;
   touched: number;
+  started: boolean;
   active?: AbortController;
   story: StoryState;
   pending?: PendingStory;
@@ -33,10 +36,11 @@ export function buildApp(
   speechProvider?: SpeechProvider,
   audit?: RequestAudit,
   deployment: Deployment = { basePath: '' },
+  saveKey = randomBytes(32).toString('hex'),
 ) {
   const app = Fastify({
     logger: false,
-    bodyLimit: 24000,
+    bodyLimit: 64000,
     trustProxy: deployment.auth ? '127.0.0.1' : false,
   });
   const path = (suffix: string) => withBasePath(deployment.basePath, suffix);
@@ -50,6 +54,10 @@ export function buildApp(
     originAllowed(value, host, deployment.publicOrigin);
   const sessionKey = (id: string, owner: string | null) => (owner ?? 'local') + ':' + id;
   const sessions = new Map<string, Session>();
+  const saves = storySaves(
+    deployment.auth?.passwordHash ?? saveKey,
+    deployment.basePath + ':' + provider.kind,
+  );
   function getSession(id: string, owner: string | null) {
     const key = sessionKey(id, owner);
     let session = sessions.get(key);
@@ -59,7 +67,7 @@ export function buildApp(
         oldest[1].active?.abort();
         sessions.delete(oldest[0]);
       }
-      session = { owner, latest: 0, touched: Date.now(), story: newStory() };
+      session = { owner, latest: 0, touched: Date.now(), started: false, story: newStory() };
       sessions.set(key, session);
     }
     session.touched = Date.now();
@@ -115,7 +123,7 @@ export function buildApp(
     const ack = acknowledgeStory(session.story, session.pending, parsed.data.through);
     if (!ack) return reply.code(400).send({ error: { code: 'BAD_PRESENTATION' } });
     session.touched = Date.now();
-    return ack;
+    return { ...ack, checkpoint: saves.seal(session.story) };
   });
   app.post(path('api/turn'), async (request, reply) => {
     if (provider.kind === 'deepseek' && !origin(request.headers.origin, request.headers.host))
@@ -128,10 +136,25 @@ export function buildApp(
         .code(400)
         .send({ error: { code: 'BAD_REQUEST', message: '请输入 1–800 字内容。' } });
     const input = parsed.data;
+    // Each page load owns a fresh session. Only a signed, already acknowledged
+    // checkpoint can seed its authoritative history, including after eviction,
+    // server restart or invitation re-login. Pending replies are never restored.
+    const restored = input.checkpoint ? saves.open(input.checkpoint) : undefined;
+    if (input.checkpoint && !restored)
+      return reply.code(400).send({
+        error: {
+          code: 'INVALID_SAVE',
+          message: '这份剧情存档无法恢复，请点击“重置剧情”重新开始。',
+        },
+      });
     const session = getSession(input.sessionId, request.miraSession);
     const stale = () =>
       reply.code(409).send({ error: { code: 'STALE_TURN', message: '这轮对话已经结束。' } });
     if (input.turnId <= session.latest) return stale();
+    // A microphone press / page cleanup may have sent cancellation before the
+    // first turn. That tombstone must not prevent checkpoint hydration.
+    if (!session.started && restored) session.story = restored;
+    session.started = true;
     session.active?.abort();
     session.pending = undefined;
     session.latest = input.turnId;
