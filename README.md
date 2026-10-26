@@ -96,7 +96,7 @@ npm run check:deploy
 
 日常自动化只使用假网络/音频，不录音、不放声。部署检查用临时密码与 Mock 验证真实编译产物的认证、素材、子路径和 WebSocket。最终数量及浏览器尺寸见 [交付验收](docs/RELEASE_ACCEPTANCE.md)。
 
-录屏交付文件位于本机 `output/release/mira-demo.mp4`，不打入源码或服务器包。录屏使用明确标注的 Mock 剧情与系统中文配音，展示文本、示例输入、打断、角色姿态、事件、时间线和故障恢复；真实 DeepSeek / Qwen 的独立验证不能与该录屏混为一谈。
+录屏交付文件为本机 `output/release/mira-demo-live.mp4`（原交付路径 `output/release/mira-demo.mp4` 也已替换）。约3分38秒，在实际线上HTTPS/WSS页面录制：10轮成功页面回复，服务端新增11次DeepSeek请求，19次Qwen TTS。保留真实等待、播放、打断、断网后的手动重试、剧情事件和C结局，不使用Mock响应或系统配音。旧Mock版本仅保留在忽略的output/release/history目录，不再作为交付。
 
 AI 工具、人工反馈与纠错记录见 [AI_USAGE.md](AI_USAGE.md)。当前进度见 [STATUS.md](STATUS.md)。
 

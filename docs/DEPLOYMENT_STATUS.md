@@ -1,6 +1,6 @@
 # 服务器部署状态 · 2026-10-26
 
-**已开放私密评审：[https://iamm.xyz/mira](https://iamm.xyz/mira)。** 未登录会进入邀请密码页，API/素材返回401；不再是503锁定页。实际应用版本为 `d0144bf`，包含右侧剧情时间线、常驻对白框、五套姿态和剧情收束修复。
+**已开放私密评审：[https://iamm.xyz/mira](https://iamm.xyz/mira)。** 未登录会进入邀请密码页，API/素材返回401；不再是503锁定页。实际应用版本为 `5ecd5dd`，包含右侧剧情时间线、常驻对白框、五套姿态和剧情收束修复。
 
 ## 访问方式
 
@@ -11,7 +11,7 @@
 ## 实际部署
 
 - 经既有 Workbench 通道，发布包 SHA256：`36695f58207ea02a04e429d712de867eda186cc876ddbb116557e7c6af434023`。
-- 发布目录 `/opt/mira-cafe/releases/d0144bf`，`/opt/mira-cafe/current` 指向它。旧 `95c4964` 保留，供回滚。
+- 发布目录 `/opt/mira-cafe/releases/5ecd5dd`，`/opt/mira-cafe/current` 指向它。旧 `d0144bf` 与 `95c4964` 保留，供回滚。
 - 包仅含编译前后端、package清单/锁文件与无秘密检查工具，不含Mac node_modules、.env、私密文件、测试日志、音频或视频。
 - 在Linux用既有Node 22.23.2从官方npm源安装84个锁定生产包，禁用安装脚本。目录755、静态文件644、发布所有者root；配置仍root:root 600，状态目录由mira-cafe拥有且700。
 - `/etc/mira-cafe.ready` 已创建；`mira-cafe.service` active，以无登录shell的mira-cafe用户运行，监听127.0.0.1:3001。原daily-quest-cards.service仍active，127.0.0.1:8787保持。
@@ -38,3 +38,9 @@
 如需紧急锁定，仅移除Mira专用`/etc/mira-cafe.ready`并停止`mira-cafe.service`。回滚代码时将current指回保留版本，恢复就绪后启动；不删除状态、密码或其他站点。密码轮换不重用首次导入工具，需明确更新哈希并重启以撤销旧会话。
 
 真人手机麦克风、软键盘、安全区、实际听感和用户最终表演效果仍待实际确认。
+
+## 真实录屏驱动的修复更新
+
+用户要求真实API录屏后，实际多轮浏览器发现3秒呈现回执超时。5ecd5dd已修复为10秒/至多一次幂等重传；只重传不调用模型的回执，不重试收费对话。更新包SHA256为`e582aa1e2ec4c2e09f6940f7b2995682beaabee6a80eb6a6c602178f56dab29e`，复用此前未改动的Linux依赖和素材，Linux root与受限用户各30项检查通过，nginx与凭据未更改。
+
+在该版本实际录成3分38秒线上API视频：10轮成功页面回复，服务端新增11次DeepSeek与19次Qwen TTS，21份回执均200，实际C结局完成。全部录制现已结束，真人设备与听感的验收边界仍保留。
