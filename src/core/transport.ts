@@ -24,31 +24,43 @@ export class HttpTransport implements Transport {
   }
   presented(receipt: Presentation): Promise<PresentationResponse> {
     return this.enqueue(async () => {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 3000);
-      try {
-        const response = await fetch(appPath('api/presented'), {
-          method: 'POST',
-          signal: controller.signal,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(receipt),
-          keepalive: true,
-        });
-        const parsed = presentationResponseSchema.safeParse(await response.json());
-        if (
-          !response.ok ||
-          !parsed.success ||
-          parsed.data.turnId !== receipt.turnId ||
-          parsed.data.through !== receipt.through
-        )
-          throw new Error('sync');
-        return parsed.data;
-      } catch {
-        this.unsynced = true;
-        throw new Error('这段对白暂时没能同步。请刷新，从这一晚重新开始。');
-      } finally {
-        clearTimeout(timer);
+      // Receipts are idempotent and do not call a model. A short network stall
+      // must not permanently invalidate an otherwise completed live reply.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 10000);
+        let retryable = true;
+        try {
+          const response = await fetch(appPath('api/presented'), {
+            method: 'POST',
+            signal: controller.signal,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(receipt),
+            keepalive: true,
+          });
+          if (!response.ok) {
+            retryable = response.status === 408 || response.status >= 500;
+            throw new Error('sync');
+          }
+          const parsed = presentationResponseSchema.safeParse(await response.json());
+          if (
+            !parsed.success ||
+            parsed.data.turnId !== receipt.turnId ||
+            parsed.data.through !== receipt.through
+          ) {
+            retryable = false;
+            throw new Error('sync');
+          }
+          return parsed.data;
+        } catch {
+          if (retryable && attempt === 0) continue;
+          this.unsynced = true;
+          throw new Error('这段对白暂时没能同步。请刷新，从这一晚重新开始。');
+        } finally {
+          clearTimeout(timer);
+        }
       }
+      throw new Error('这段对白暂时没能同步。请刷新，从这一晚重新开始。');
     });
   }
   async turn(request: TurnRequest, signal: AbortSignal) {

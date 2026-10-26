@@ -172,7 +172,7 @@ describe('non-billable presentation receipts ordered before cancellation and the
         new AbortController().signal,
       ),
     ).rejects.toThrow('同步');
-    expect(f).toHaveBeenCalledOnce();
+    expect(f).toHaveBeenCalledTimes(2);
     const aborted = new AbortController();
     aborted.abort();
     await expect(
@@ -181,6 +181,6 @@ describe('non-billable presentation receipts ordered before cancellation and the
         aborted.signal,
       ),
     ).rejects.toMatchObject({ name: 'AbortError' });
-    expect(f).toHaveBeenCalledOnce();
+    expect(f).toHaveBeenCalledTimes(2);
   });
 });
