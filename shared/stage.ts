@@ -1,9 +1,11 @@
 import { z } from 'zod';
 export const OPENING_NARRATION =
   '你推门躲进雨夜的咖啡馆。窗边的女孩把照片挪到杯边，给你让出一个位置。';
+export const stageLocationSchema = z.enum(['cafe', 'lodge']);
+export type StageLocation = z.infer<typeof stageLocationSchema>;
 export const stageCueSchema = z
   .object({
-    kind: z.enum(['photo-drift', 'phone-message', 'practice', 'draft', 'reply-sent']),
+    kind: z.enum(['photo-drift', 'phone-message', 'lodge-view', 'practice', 'draft', 'reply-sent']),
     text: z.string().trim().min(1).max(100),
     placement: z.enum(['before', 'after']),
     photoReturn: z.boolean().optional(),
@@ -18,6 +20,11 @@ export type StageProps = {
   message: string;
 };
 export const INITIAL_PROPS: StageProps = { photoPose: 'aside', phone: 'none', message: '' };
+export function locationAfterCue(location: StageLocation, cue: StageCue): StageLocation {
+  if (cue.kind === 'lodge-view') return 'lodge';
+  if (['practice', 'draft', 'reply-sent'].includes(cue.kind)) return 'cafe';
+  return location;
+}
 export function applyCue(props: StageProps, cue: StageCue): StageProps {
   if (cue.kind === 'photo-drift') return { ...props, photoPose: 'near' };
   if (cue.kind === 'phone-message')

@@ -19,8 +19,10 @@ import {
   OPENING_NARRATION,
   INITIAL_PROPS,
   applyCue,
+  locationAfterCue,
   type StageProps,
   type PropFocus,
+  type StageLocation,
 } from '../../shared/stage';
 import type { Transport } from './transport';
 import type { ProgressStorage } from './progress-storage';
@@ -39,6 +41,7 @@ export interface Snapshot {
   emotion: Emotion;
   action: Action;
   scene: Scene;
+  location: StageLocation;
   photo: boolean;
   error: string;
   notice: string;
@@ -60,6 +63,7 @@ const INITIAL: Snapshot = {
   emotion: 'guarded',
   action: 'idle',
   scene: 'rain',
+  location: 'cafe',
   photo: false,
   error: '',
   notice: '',
@@ -73,6 +77,7 @@ export class ConversationEngine {
   private controller?: AbortController;
   private history: History = [];
   private committedProps: StageProps = { ...INITIAL_PROPS };
+  private committedLocation: StageLocation = 'cafe';
   private checkpoint?: string;
   constructor(
     private transport: Transport,
@@ -87,6 +92,7 @@ export class ConversationEngine {
       if (saved) {
         this.checkpoint = saved.checkpoint;
         this.committedProps = { ...saved.view.stageProps };
+        this.committedLocation = saved.view.location;
         this.snapshot = {
           ...INITIAL,
           ...saved.view,
@@ -113,6 +119,7 @@ export class ConversationEngine {
           subtitle,
           emotion,
           scene,
+          location: this.committedLocation,
           photo,
           lastInput,
           completed,
@@ -151,6 +158,7 @@ export class ConversationEngine {
       propFocus: 'none',
       narration: '',
       stageProps: { ...this.committedProps },
+      location: this.committedLocation,
       ...(this.snapshot.stageProps.phone === 'sent' && this.committedProps.phone !== 'sent'
         ? { scene: 'rain' as const }
         : {}),
@@ -222,16 +230,18 @@ export class ConversationEngine {
             propFocus:
               unit.cue.kind === 'photo-drift'
                 ? 'photo'
-                : unit.cue.kind === 'practice'
+                : unit.cue.kind === 'practice' || unit.cue.kind === 'lodge-view'
                   ? 'none'
                   : 'phone',
             narration: unit.text,
             stageProps: applyCue(this.committedProps, unit.cue),
+            location: locationAfterCue(this.committedLocation, unit.cue),
             ...(unit.cue.kind === 'reply-sent' ? { scene: 'warm' as const } : {}),
           });
           await delay(this.narrationMs(unit.text), signal);
           if (!current()) return;
           this.committedProps = applyCue(this.committedProps, unit.cue);
+          this.committedLocation = locationAfterCue(this.committedLocation, unit.cue);
         } else {
           let started = false;
           let acceptingStart = true;
@@ -368,6 +378,7 @@ export class ConversationEngine {
     this.sessionId = crypto.randomUUID();
     this.history = [];
     this.committedProps = { ...INITIAL_PROPS };
+    this.committedLocation = 'cafe';
     this.update({ ...INITIAL, turnId: this.snapshot.turnId });
     try {
       this.saves?.clear();

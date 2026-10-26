@@ -74,6 +74,7 @@ describe('browser progress with authoritative server context', () => {
         await first.submit(text);
       const before = first.getSnapshot();
       expect(before.story?.facts).toContain('commission');
+      expect(before.location).toBe('lodge');
       expect(values.size).toBe(1);
       await Promise.all(pending);
       await app.close();
@@ -85,6 +86,7 @@ describe('browser progress with authoritative server context', () => {
         stageProps: before.stageProps,
         suggestions: before.suggestions,
         subtitle: before.subtitle,
+        location: 'lodge',
         lastInput: before.lastInput,
         status: 'idle',
         presentation: 'none',
@@ -105,12 +107,14 @@ describe('browser progress with authoritative server context', () => {
       ])
         await restored.submit(text);
       expect(restored.getSnapshot().story?.facts).toContain('draft');
+      expect(restored.getSnapshot().location).toBe('cafe');
       await restored.submit('先视频聊十分钟，再决定试住一天');
       const ending = engineWith(new HttpTransport(), saves);
       expect(ending.getSnapshot()).toMatchObject({
         story: { ending: 'b', planQuote: '先视频聊十分钟，再决定试住一天' },
         stageProps: { phone: 'sent' },
         scene: 'warm',
+        location: 'cafe',
         status: 'idle',
       });
       await ending.submit('谢谢');
@@ -122,6 +126,7 @@ describe('browser progress with authoritative server context', () => {
         subtitle: STORY_OPENING,
         lastInput: '',
         stageProps: { phone: 'none', photoPose: 'aside' },
+        location: 'cafe',
       });
       await restored.submit('你好');
       expect(contexts.at(-1)!.storyContext!.facts).toEqual([]);
@@ -129,6 +134,12 @@ describe('browser progress with authoritative server context', () => {
       expect(engineWith(new HttpTransport(), saves).getSnapshot().story?.facts).toEqual([
         'arrival',
       ]);
+      const legacy = saves.load()!;
+      const { location: _location, ...oldView } = legacy.view;
+      values.set([...values.keys()][0], JSON.stringify({ ...legacy, view: oldView }));
+      expect(engineWith(new HttpTransport(), saves).getSnapshot()).toMatchObject({
+        location: 'cafe', story: { facts: ['arrival'] }, saveNotice: '',
+      });
     } finally {
       await Promise.all(pending);
       await app.close();

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { emotionSchema, sceneSchema } from '../../shared/protocol';
 import { storyViewSchema } from '../../shared/story';
 import { appPath } from './app-path';
+import { stageLocationSchema } from '../../shared/stage';
 
 const progressSchema = z.object({
   version: z.literal(1),
@@ -13,6 +14,7 @@ const progressSchema = z.object({
     subtitle: z.string().max(180),
     emotion: emotionSchema,
     scene: sceneSchema,
+    location: stageLocationSchema.default('cafe'),
     photo: z.boolean(),
     stageProps: z.object({
       photoPose: z.enum(['aside', 'near', 'returned']),

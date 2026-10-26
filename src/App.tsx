@@ -17,6 +17,7 @@ import { Narrative } from './Narrative';
 import { Suggestions } from './Suggestions';
 import { ModeBadge } from './ModeBadge';
 import { SCENE_ARTWORK } from './scene-artwork';
+import { SceneBackground } from './SceneBackground';
 import { UserMessage, type InputSource } from './UserMessage';
 const STATUS = {
   idle: '在等你开口',
@@ -73,6 +74,11 @@ export function App() {
   const [text, setText] = useState('');
   const [inputSource, setInputSource] = useState<InputSource>('text');
   const [backgroundReady, setBackgroundReady] = useState(false);
+  const [backgroundStatus, setBackgroundStatus] = useState<'ready' | 'loading' | 'failed'>('ready');
+  const [backgroundAttempt, setBackgroundAttempt] = useState(0);
+  useEffect(() => {
+    if (streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight;
+  }, [backgroundStatus]);
   const [audioNotice, setAudioNotice] = useState('');
   const [authentication, setAuthentication] = useState(false);
   const [provider, setProvider] = useState<string | null>(null);
@@ -134,8 +140,9 @@ export function App() {
   };
   const active =
     state.status === 'speaking' || state.status === 'thinking' || state.status === 'narrating';
+  const artwork = SCENE_ARTWORK[state.location];
   return (
-    <main ref={sceneRef} className={`app scene-${state.scene}`}>
+    <main ref={sceneRef} className={`app scene-${state.scene} location-${state.location}`}>
       <div className="ambient-grain" />
       <header className="topbar">
         <a className="brand" href={appPath()} aria-label="Mira Café 首页">
@@ -178,23 +185,15 @@ export function App() {
       </header>
       <section
         className={'stage ' + (backgroundReady ? 'illustrated-stage' : '')}
-        aria-label="夜雨咖啡馆互动场景"
+        aria-label={artwork.description}
       >
-        <img
-          className="scene-illustration"
-          src={SCENE_ARTWORK.src}
-          alt={SCENE_ARTWORK.description}
-          width={SCENE_ARTWORK.width}
-          height={SCENE_ARTWORK.height}
-          onLoad={() => setBackgroundReady(true)}
-          onError={() => setBackgroundReady(false)}
-          fetchPriority="high"
+        <SceneBackground
+          location={state.location}
+          preloadLodge={state.story?.facts.includes('photo-drift') === true}
+          onReadyChange={setBackgroundReady}
+          onStatusChange={setBackgroundStatus}
+          attempt={backgroundAttempt}
         />
-        {backgroundReady && (
-          <div className="illustration-rain">
-            <div className="rain" />
-          </div>
-        )}
         <div className="window-frame">
           <div className="city">
             <span />
@@ -214,12 +213,12 @@ export function App() {
         </div>
         <div className="warm-light" />
         <div className="story-heading">
-          <span className="eyebrow">CHAPTER 01 · 雨夜来客</span>
-          <h1>雨停之前</h1>
+          <span className="eyebrow">{artwork.chapter}</span>
+          <h1>{artwork.title}</h1>
           <p>有些故事，适合从一杯热咖啡开始。</p>
         </div>
         <div className="place-label">
-          <span className="tiny-star">✦</span> 23:47 <span>·</span> 城市一隅
+          <span className="tiny-star">✦</span> {artwork.place}
         </div>
         <div className="character-wrap">
           <Character state={state} />
@@ -307,6 +306,22 @@ export function App() {
             {state.saveNotice && (
               <div className="notice" role="status">
                 {state.saveNotice}
+              </div>
+            )}
+            {state.location === 'lodge' && backgroundStatus !== 'ready' && (
+              <div className="notice scene-notice" role="status">
+                {backgroundStatus === 'failed'
+                  ? '照片里的风景暂时没能展开，先继续听她说。'
+                  : '照片里的风景，正慢慢展开…'}
+                {backgroundStatus === 'failed' && (
+                  <button
+                    className="scene-retry"
+                    type="button"
+                    onClick={() => setBackgroundAttempt((old) => old + 1)}
+                  >
+                    重新展开
+                  </button>
+                )}
               </div>
             )}
           </div>

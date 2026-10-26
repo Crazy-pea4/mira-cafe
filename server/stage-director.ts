@@ -3,6 +3,10 @@ import type { StageCue } from '../shared/stage';
 import type { StoryState } from './story';
 // Directions are authored locally. The model can select an eligible beat, never arbitrary UI actions.
 export function directStory(state: StoryState, reply: Reply, input = ''): Reply {
+  const returnToCafe =
+    state.cues['lodge-view'] && !state.cues.practice && !state.cues.draft && !state.ending
+      ? '杯碟轻响，照片里的山色渐远，你们仍坐在雨夜的咖啡馆。'
+      : '';
   const segments = reply.segments.map((segment) => {
     const { cue: _untrusted, ...dialogue } = segment;
     let cue: StageCue | undefined;
@@ -25,18 +29,26 @@ export function directStory(state: StoryState, reply: Reply, input = ''): Reply 
           message: '明早需要去车站接你吗？',
         };
         break;
+      case 'commission':
+        if (state.facts.includes('phone-message') && !state.ending)
+          cue = {
+            kind: 'lodge-view',
+            placement: 'before',
+            text: '她的指尖停在照片上。咖啡馆的灯影渐远，你仿佛走进照片里的山间旅馆：雨后的石阶通向门廊，远山浮在薄雾里。',
+          };
+        break;
       case 'practice':
         cue = {
           kind: 'practice',
           placement: 'before',
-          text: '她把手机扣在桌上，抬起眼睛。这次，她试着先看向镜头另一边的人。',
+          text: returnToCafe + '她把手机扣在桌上，抬起眼睛。这次，她试着先看向镜头另一边的人。',
         };
         break;
       case 'draft':
         cue = {
           kind: 'draft',
           placement: 'before',
-          text: 'Mira 把手机转过来。输入框里的一句话，已经删改了好几次。',
+          text: returnToCafe + 'Mira 把手机转过来。输入框里的一句话，已经删改了好几次。',
           message: '没问题，我很擅长这类拍摄。明天见。',
         };
         break;
@@ -46,7 +58,7 @@ export function directStory(state: StoryState, reply: Reply, input = ''): Reply 
         cue = {
           kind: 'reply-sent',
           placement: 'after',
-          text: '她重新写好那条消息，按下发送。屏幕暗下去，窗外的雨声也轻了些。',
+          text: returnToCafe + '她重新写好那条消息，按下发送。屏幕暗下去，窗外的雨声也轻了些。',
           message:
             segment.beat === 'ending-a'
               ? '您好，我拍人的经验还不多。明天先聊一聊，再开始拍摄，可以吗？'

@@ -1,4 +1,46 @@
 /* One continuous stage. The HUD is part of the scene, never a second page. */
+.scene-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.illustrated-stage .scene-illustration-lodge {
+  z-index: 1;
+  opacity: 0;
+  object-position: 28% 50%;
+  transition: opacity 1.4s ease-in-out;
+}
+.illustrated-stage .scene-illustration-lodge.visible {
+  opacity: 1;
+}
+.scene-backdrop .illustration-rain {
+  transition: opacity 1.2s;
+}
+.scene-backdrop .illustration-rain.hidden {
+  opacity: 0;
+}
+.scene-retry {
+  margin-left: 8px;
+  padding: 5px 12px;
+  border: 1px solid #ead1ad66;
+  border-radius: 16px;
+  color: #eee4d6;
+  background: #211e24d9;
+  font: inherit;
+  cursor: pointer;
+}
+@media (max-width: 520px) {
+  .illustrated-stage .scene-illustration-lodge {
+    object-position: 14% 50%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .illustrated-stage .scene-illustration-lodge,
+  .scene-backdrop .illustration-rain {
+    transition: none;
+  }
+}
 html,
 body,
 #root {
