@@ -16,6 +16,9 @@ export interface BrowserWire {
   addEventListener(type: string, listener: (event: any) => void): void;
 }
 export type BrowserWireFactory = (url: string) => BrowserWire;
+export class SpeechTransportError extends Error {
+  constructor(readonly code: string, message: string) { super(message); }
+}
 const nativeFactory: BrowserWireFactory = (url) => new WebSocket(url);
 function deferred<T>() {
   let resolve!: (value: T) => void, reject!: (error: unknown) => void;
@@ -132,7 +135,7 @@ export class LocalSpeechTransport implements SpeechTransport {
           finish(new Error('语音播放数据异常，已保留文字。'));
         }
       }
-      if (event.type === 'error') finish(new Error(event.message));
+      if (event.type === 'error') finish(new SpeechTransportError(event.code, event.message));
       if (event.type === 'done') {
         try {
           if (start === 'asr.start') transcript = normalizeTranscript(transcript);

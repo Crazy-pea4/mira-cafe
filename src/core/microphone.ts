@@ -8,6 +8,7 @@ export interface CaptureSession {
 export type CaptureFactory = (
   frame: (pcm: Uint8Array) => void,
   signal: AbortSignal,
+  failed?: () => void,
 ) => Promise<CaptureSession>;
 
 // Explicit permission step: never starts a worklet, uploads audio or opens ASR.
@@ -24,7 +25,7 @@ export async function prepareMicrophone(): Promise<void> {
   }
 }
 
-export const openMicrophone: CaptureFactory = async (frame, signal) => {
+export const openMicrophone: CaptureFactory = async (frame, signal, failed) => {
   if (signal.aborted) throw abortError();
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia)
     throw new Error('真实麦克风需要 localhost 或 HTTPS 与浏览器支持。');
@@ -37,17 +38,26 @@ export const openMicrophone: CaptureFactory = async (frame, signal) => {
     source: MediaStreamAudioSourceNode | undefined,
     gain: GainNode | undefined;
   let closed = false;
+  const disconnected = () => {
+    if (closed) return;
+    cleanup();
+    failed?.();
+  };
   const cleanup = () => {
     if (closed) return;
     closed = true;
     signal.removeEventListener('abort', cleanup);
     if (node) {
       node.port.onmessage = null;
+      node.onprocessorerror = null;
       node.disconnect();
     }
     source?.disconnect();
     gain?.disconnect();
-    stream?.getTracks().forEach((track) => track.stop());
+    stream?.getTracks().forEach((track) => {
+      track.removeEventListener?.('ended', disconnected);
+      track.stop();
+    });
     void context.close().catch(() => {});
   };
   signal.addEventListener('abort', cleanup, { once: true });
@@ -77,6 +87,10 @@ export const openMicrophone: CaptureFactory = async (frame, signal) => {
       numberOfOutputs: 1,
       outputChannelCount: [1],
     });
+    if (failed) {
+      node.onprocessorerror = disconnected;
+      stream.getTracks().forEach((track) => track.addEventListener?.('ended', disconnected));
+    }
     node.port.onmessage = (event) => {
       if (closed || signal.aborted) return;
       if (event.data.samples) {
@@ -127,12 +141,12 @@ export class MicrophoneCapture {
   private active?: CaptureSession;
   private generation = 0;
   constructor(private factory: CaptureFactory = openMicrophone) {}
-  async start(frame: (pcm: Uint8Array) => void, signal: AbortSignal) {
+  async start(frame: (pcm: Uint8Array) => void, signal: AbortSignal, failed?: () => void) {
     this.cancel();
     const token = this.generation;
     const session = await this.factory((pcm) => {
       if (token === this.generation && !signal.aborted) frame(pcm);
-    }, signal);
+    }, signal, () => { if (token === this.generation && !signal.aborted) failed?.(); });
     if (token !== this.generation || signal.aborted) {
       session.cancel();
       throw abortError();

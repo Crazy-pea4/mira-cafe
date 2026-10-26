@@ -555,10 +555,74 @@ body,
 .composer .talk small {
   white-space: nowrap;
 }
+.composer .call-button {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 11px;
+  border: 1px solid #a8c4ab77;
+  border-radius: 50%;
+  background: #829f8c20;
+  color: #c0d7bc;
+}
+.call-button svg {
+  display: block;
+  width: 21px;
+  height: 21px;
+}
+.composer .call-button.connected {
+  border-color: #e9a69b88;
+  background: #9b4949;
+  color: #fff1df;
+}
+.composer .call-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.call-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  color: #dfc9ad;
+  font-size: 11px;
+  line-height: 1.6;
+  min-height: 24px;
+}
+.call-indicator {
+  flex: 0 0 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c9b89e;
+}
+.call-status.connected .call-indicator {
+  background: #b8d4af;
+  box-shadow: 0 0 8px #b8d4af44;
+}
+.call-message {
+  flex: 1;
+}
+.call-status time {
+  font-variant-numeric: tabular-nums;
+  color: #c5bcae;
+}
 @media (max-width: 600px) {
   .composer .talk {
     flex-basis: 102px;
     width: 102px;
+  }
+  .composer .call-button {
+    flex-basis: 40px;
+    width: 40px;
+    height: 40px;
+    padding: 9px;
+  }
+  .composer:has(.call-button) .talk {
+    flex-basis: 88px;
+    width: 88px;
+    padding: 6px 5px;
   }
 }
 

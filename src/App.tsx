@@ -6,6 +6,8 @@ import { SceneAudio } from './core/scene-audio';
 import { bindAudioLifecycle } from './core/audio-lifecycle';
 import { VoiceInput } from './core/voice-input';
 import { VoiceEntry } from './core/voice-entry';
+import { VoiceCall } from './core/voice-call';
+import { VoiceCallButton, VoiceCallStatus } from './VoiceCallControl';
 import { prepareMicrophone } from './core/microphone';
 import { voiceButtonView } from './VoiceButton';
 import { LocalSpeechTransport } from './core/speech-transport';
@@ -28,7 +30,7 @@ const STATUS = {
   error: '连接暂时中断',
 };
 export function App() {
-  const [{ engine, audio, entry }] = useState(() => {
+  const [{ engine, audio, entry, call }] = useState(() => {
     const audio = new SceneAudio(),
       voice = new VoiceInput(new LocalSpeechTransport());
     const entry = new VoiceEntry(voice, prepareMicrophone);
@@ -43,10 +45,12 @@ export function App() {
       ),
       audio,
       entry,
+      call: new VoiceCall(new LocalSpeechTransport()),
     };
   });
   const state = useSyncExternalStore(engine.subscribe, engine.getSnapshot, engine.getSnapshot);
   const input = useSyncExternalStore(entry.subscribe, entry.getSnapshot, entry.getSnapshot);
+  const callState = useSyncExternalStore(call.subscribe, call.getSnapshot, call.getSnapshot);
   const voiceButton = voiceButtonView(input);
   const sceneRef = useRef<HTMLElement>(null),
     hudRef = useRef<HTMLElement>(null),
@@ -104,28 +108,39 @@ export function App() {
       audio,
       () => {
         entry.suspend();
+        call.stop();
         engine.suspend();
       },
       setAudioNotice,
-      () => entry.suspend(),
+      () => {
+        entry.suspend();
+        if (call.getSnapshot().active) call.stop('页面已进入后台，已暂停收音。点击电话继续。', false);
+      },
     );
-    const blur = () => entry.blur();
+    const blur = () => { entry.blur(); call.blur(); };
+    const offline = () => {
+      if (call.getSnapshot().active) call.stop('网络已断开，通话已结束。网络恢复后点击电话继续。');
+    };
     window.addEventListener('blur', blur);
+    window.addEventListener('offline', offline);
     return () => {
       controller.abort();
       unbindAudio();
       engine.suspend();
       window.removeEventListener('blur', blur);
+      window.removeEventListener('offline', offline);
     };
-  }, [engine, entry, audio]);
+  }, [engine, entry, audio, call]);
   const send = (value: string, source: InputSource = 'text') => {
     if (!value.trim() || value.trim().length > 800) return;
     setInputSource(source);
+    call.clearInput();
     entry.cancel();
     setText('');
     void engine.submit(value);
   };
   const hold = () => {
+    if (call.getSnapshot().active) return;
     const suggestion = engine.getSnapshot().suggestions[0] ?? '我愿意听，你慢慢说。';
     entry.press({
       begin: () => {
@@ -136,6 +151,22 @@ export function App() {
       mock: () => send(suggestion, 'mock-voice'),
       notice: (message) => engine.inputNotice(message),
       end: () => engine.endListening(),
+    });
+  };
+  const toggleCall = () => {
+    if (call.getSnapshot().active) {
+      call.stop('通话已结束，随时可以再聊。');
+      return;
+    }
+    if (!input.loaded || !input.available) return;
+    entry.cancel();
+    void call.start({
+      turnId: () => engine.getSnapshot().turnId,
+      responding: () => ['speaking', 'thinking', 'narrating'].includes(engine.getSnapshot().status),
+      begin: () => engine.interrupt(true),
+      text: (value) => send(value, 'asr'),
+      end: () => engine.endListening(),
+      stop: () => engine.interrupt(),
     });
   };
   const active =
@@ -159,6 +190,7 @@ export function App() {
             onClick={() => {
               if (!window.confirm('重置剧情并清除本机存档？将从咖啡馆开场重新开始。')) return;
               entry.cancel();
+              call.stop();
               engine.reset();
               setText('');
               setInputSource('text');
@@ -172,6 +204,7 @@ export function App() {
               method="post"
               onSubmit={() => {
                 entry.cancel();
+                call.stop();
                 engine.suspend();
                 audio.dispose();
               }}
@@ -331,6 +364,7 @@ export function App() {
           story={state.story}
           onChoose={(value) => send(value)}
         />
+        <VoiceCallStatus state={callState} status={state.status} />
         <form
           className="composer"
           onSubmit={(event) => {
@@ -352,7 +386,7 @@ export function App() {
           <button
             type="button"
             className={'talk ' + (input.held ? 'holding' : '')}
-            disabled={voiceButton.disabled}
+            disabled={callState.active || voiceButton.disabled}
             onClick={() => {
               if (entry.needsPermission())
                 void entry.prepare((message) => engine.inputNotice(message));
@@ -384,7 +418,9 @@ export function App() {
             }}
             onBlur={() => entry.cancelHeld()}
             aria-label={
-              input.mode === 'mock'
+              callState.active
+                ? '实时通话中，无需按住说话'
+                : input.mode === 'mock'
                 ? '体验对白（示例，不使用麦克风）'
                 : entry.needsPermission()
                   ? '启用麦克风（授权后再按住说话）'
@@ -393,10 +429,16 @@ export function App() {
           >
             <span className="mic-icon">♩</span>
             <span>
-              {voiceButton.label}
-              <small>{voiceButton.detail}</small>
+              {callState.active ? '通话中' : voiceButton.label}
+              <small>{callState.active ? '请直接说话' : voiceButton.detail}</small>
             </span>
           </button>
+          <VoiceCallButton
+            state={callState}
+            available={input.available}
+            loaded={input.loaded}
+            onToggle={toggleCall}
+          />
         </form>
         <p
           className="voice-help"
@@ -404,7 +446,7 @@ export function App() {
           data-testid="voice-help"
           data-recording={input.showMessage && input.phase === 'recording'}
         >
-          {input.showMessage ? input.message : ''}
+          {callState.active ? '通话中会持续使用麦克风；点击红色电话挂断。' : input.showMessage ? input.message : ''}
         </p>
       </section>
     </main>
