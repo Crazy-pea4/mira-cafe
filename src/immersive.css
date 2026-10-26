@@ -461,6 +461,10 @@ body,
 .reset-story {
   white-space: nowrap;
 }
+.subtitle-box .dialogue-placeholder {
+  color: #d0c3b3;
+  font-size: 0.9em;
+}
 @media (max-width: 520px) {
   .app .top-actions {
     gap: 6px;

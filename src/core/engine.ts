@@ -31,6 +31,7 @@ export interface Snapshot {
   narration: string;
   stageProps: StageProps;
   presentation: 'none' | 'simulated' | 'audio-clock';
+  pendingAudio: boolean;
   status: CharacterStatus;
   turnId: number;
   subtitle: string;
@@ -51,6 +52,7 @@ const INITIAL: Snapshot = {
   stageProps: { ...INITIAL_PROPS },
   suggestions: [...INITIAL_SUGGESTIONS],
   presentation: 'none',
+  pendingAudio: false,
   status: 'idle',
   turnId: 0,
   subtitle: STORY_OPENING,
@@ -148,6 +150,7 @@ export class ConversationEngine {
         : {}),
       suggestions: [],
       presentation: 'none',
+      pendingAudio: false,
       turnId: previous + 1,
       status: listening ? 'listening' : 'idle',
       subtitle: preserveSubtitle ? this.snapshot.subtitle : '',
@@ -224,10 +227,14 @@ export class ConversationEngine {
           if (!current()) return;
           this.committedProps = applyCue(this.committedProps, unit.cue);
         } else {
+          let started = false;
+          let acceptingStart = true;
           const present = (presentation: Snapshot['presentation'] = 'audio-clock') => {
             if (!current()) return;
+            started = true;
             this.update({
               presentation,
+              pendingAudio: false,
               status: 'speaking',
               subtitle: unit.text,
               emotion: segment.emotion,
@@ -239,8 +246,21 @@ export class ConversationEngine {
             });
           };
           try {
-            await this.audio.play(unit.text, signal, () => present(), { turnId });
+            this.update({ pendingAudio: true });
+            await this.audio.play(
+              unit.text,
+              signal,
+              () => {
+                if (acceptingStart) present();
+              },
+              { turnId },
+            );
+            acceptingStart = false;
+            // A resolved player is not proof that its start callback ran. Some
+            // browsers may finish/skip a buffer without ever presenting it.
+            if (current() && !started) throw new Error('Audio completed without presentation');
           } catch (error) {
+            acceptingStart = false;
             if (!current() || isAbort(error)) return;
             present('simulated');
             this.update({
@@ -298,7 +318,8 @@ export class ConversationEngine {
                 status: 'idle',
                 action: 'idle',
                 suggestions: [],
-                notice: error instanceof Error ? error.message : '对白暂时没有同步，请刷新重开。',
+                notice:
+                  error instanceof Error ? error.message : '对白暂时没有同步，请刷新恢复存档。',
               });
             return;
           }

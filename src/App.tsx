@@ -107,7 +107,7 @@ export function App() {
     return () => {
       controller.abort();
       unbindAudio();
-      engine.dispose();
+      engine.suspend();
       window.removeEventListener('blur', blur);
     };
   }, [engine, entry, audio]);
@@ -253,7 +253,7 @@ export function App() {
               </div>
               <span className={`state-badge ${state.status}`} data-testid="state">
                 <i />
-                {STATUS[state.status]}
+                {state.pendingAudio ? '正在准备语音' : STATUS[state.status]}
               </span>
             </div>
             <div className="subtitle-box">
@@ -270,18 +270,17 @@ export function App() {
                     ? input.mode === 'live'
                       ? '我在听。'
                       : '松开后，就从这个话题聊起吧。'
-                    : state.subtitle ||
-                      (state.status === 'narrating' ? (
-                        '…'
-                      ) : state.status === 'thinking' ? (
-                        <span className="thinking-dots">
-                          <i />
-                          <i />
-                          <i />
+                    : state.subtitle || (
+                        <span className="dialogue-placeholder">
+                          {state.pendingAudio
+                            ? '正在准备语音…'
+                            : state.status === 'narrating'
+                              ? '剧情正在继续…'
+                              : state.status === 'thinking'
+                                ? 'Mira 正在想怎么说…'
+                                : '可以继续对 Mira 说话。'}
                         </span>
-                      ) : (
-                        ''
-                      ))}
+                      )}
                 </p>
               )}
               {active && (

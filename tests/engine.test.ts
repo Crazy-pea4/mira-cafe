@@ -244,6 +244,39 @@ describe('conversation cancellation and presentation', () => {
     await run;
     expect(engine.getSnapshot().status).toBe('idle');
   });
+  it('shows actual reply text if second-turn audio finishes without a start event, without another model request', async () => {
+    vi.useFakeTimers();
+    const { transport, audio, engine } = setup();
+    const first = engine.submit('第一轮');
+    transport.calls[0].task.resolve(response(1, '第一轮的回答。'));
+    await flush();
+    audio.calls[0].start();
+    audio.calls[0].task.resolve();
+    await first;
+    const second = engine.submit('第二轮');
+    transport.calls[1].task.resolve(response(engine.getSnapshot().turnId, '第二轮的真实回答。'));
+    await flush();
+    expect(engine.getSnapshot().pendingAudio).toBe(true);
+    audio.calls[1].task.resolve();
+    await flush();
+    expect(engine.getSnapshot()).toMatchObject({
+      subtitle: '第二轮的真实回答。',
+      pendingAudio: false,
+      presentation: 'simulated',
+      status: 'speaking',
+    });
+    expect(engine.getSnapshot().notice).toContain('字幕');
+    await vi.advanceTimersByTimeAsync(100);
+    await second;
+    expect(engine.getSnapshot()).toMatchObject({
+      subtitle: '第二轮的真实回答。',
+      status: 'idle',
+      completed: 2,
+    });
+    audio.calls[1].start();
+    expect(engine.getSnapshot().status).toBe('idle');
+    expect(transport.calls).toHaveLength(2);
+  });
   it('keeps subtitles and a clear hint when autoplay is blocked, without retrying the model', async () => {
     vi.useFakeTimers();
     const { transport, audio, engine } = setup();
