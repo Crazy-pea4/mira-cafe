@@ -18,6 +18,13 @@ import {
 } from '../shared/protocol';
 import { directStory } from './stage-director';
 import type { StageCue } from '../shared/stage';
+import {
+  allowedBeats,
+  inputBoundary,
+  guidedSuggestions,
+  pausesStory,
+} from '../shared/story-progression';
+export { allowedBeats, inputBoundary } from '../shared/story-progression';
 const factsText = {
   arrival: 'Mira已接住玩家初次回应，给躲雨的玩家让座。',
   'photo-drift': '穿堂风把照片吹到了玩家手边。',
@@ -58,51 +65,6 @@ export function storyView(state: StoryState): StoryView {
     declined: state.declined,
   };
 }
-export function allowedBeats(state: StoryView): StoryBeat[] {
-  if (state.ending) return [];
-  const known = new Set(state.facts);
-  const next: StoryBeat[] = [];
-  if (!known.has('arrival')) return ['arrival'];
-  if (!known.has('photo-drift')) return ['photo-drift'];
-  if (!known.has('phone-message')) return ['phone-message'];
-  if (!known.has('commission')) next.push('commission');
-  else {
-    for (const fact of ['ticket', 'people', 'memory'] as const)
-      if (!known.has(fact)) next.push(fact);
-    if (known.has('people') && !known.has('fear')) next.push('fear');
-    if (
-      ['ticket', 'people', 'memory', 'fear'].every((f) => known.has(f as keyof typeof factsText)) &&
-      !known.has('draft')
-    )
-      next.push('draft');
-    if (known.has('fear') && !known.has('practice')) next.push('practice');
-    if (known.has('draft'))
-      next.push('ending-a', ...(state.planQuote ? ['ending-b' as const] : []), 'ending-c');
-  }
-  if (state.declined && known.has('commission') && !next.includes('ending-c'))
-    next.push('ending-c');
-  return next;
-}
-export function inputBoundary(text: string): 'decline' | 'smalltalk' | 'reframe' | undefined {
-  if (
-    /不想(?:聊|参与|出主意)|不聊这个|别(?:再)?问我|别再聊|你自己决定|自己拿主意|不帮.*(?:决定|主意)/.test(
-      text,
-    )
-  )
-    return 'decline';
-  if (
-    /变成.*(?:太空|飞船|魔法)|这里是.*(?:太空|飞船)|你是.*(?:机器人|魔法师)|把咖啡馆.*(?:太空|飞船)/.test(
-      text,
-    )
-  )
-    return 'reframe';
-  if (
-    /咖啡|猫|蛋糕|电影|音乐|天气/.test(text) &&
-    !/委托|拍|回信|旅馆|车票|消息|旅行|决定|试住|视频/.test(text)
-  )
-    return 'smalltalk';
-  return;
-}
 export function storyContext(state: StoryState): StoryContext {
   const last = state.history.filter((h) => h.role === 'assistant').at(-1);
   let lastAskedQuestion = false;
@@ -141,7 +103,8 @@ export function storyContext(state: StoryState): StoryContext {
 export function proposalFor(reply: Reply, text: string): StoryProposal {
   const boundary = inputBoundary(text);
   const proposal = reply.story ?? { intent: boundary ?? 'engage' };
-  const confirming = /^(就|按|照|把).*(刚才|这个|那个|前面|办法|方案)|^就这么|^就这样/.test(text);
+  const confirming =
+    /^(就|按|照|把|用|这个|那个).*(刚才|这个|那个|前面|办法|方案)|^就这么|^就这样/.test(text);
   const planQuote =
     proposal.planQuote ??
     (proposal.intent === 'alternative' && !confirming ? text.slice(0, 60) : undefined);
@@ -467,7 +430,7 @@ function nextSuggestions(state: StoryState, pending: PendingStory): string[] {
         '你愿意再讲一点吗？',
       ];
   for (const value of reserve) if (!previous.has(suggestionKey(value))) add(value);
-  return suggestionSchema.parse(result.slice(0, 3));
+  return suggestionSchema.parse(guidedSuggestions(state, result.slice(0, 3), !!conversational));
 }
 export type PendingStory = {
   turnId: number;
@@ -507,6 +470,7 @@ export function prepareStory(state: StoryState, request: TurnRequest, reply: Rep
   // advance only from acknowledged prerequisites and a relevant player response, never a timer.
   if (
     !reply.segments.some((s) => s.beat) &&
+    !pausesStory(request.text) &&
     !state.ending &&
     !['decline', 'clarify', 'reframe'].includes(proposal.intent)
   ) {

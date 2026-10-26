@@ -24,6 +24,7 @@ import {
 } from '../../shared/stage';
 import type { Transport } from './transport';
 import type { ProgressStorage } from './progress-storage';
+import { guidedSuggestions } from '../../shared/story-progression';
 export interface Snapshot {
   propFocus: PropFocus;
   suggestions: string[];
@@ -86,7 +87,12 @@ export class ConversationEngine {
       if (saved) {
         this.checkpoint = saved.checkpoint;
         this.committedProps = { ...saved.view.stageProps };
-        this.snapshot = { ...INITIAL, ...saved.view, notice: '已恢复上次的剧情，接着聊吧。' };
+        this.snapshot = {
+          ...INITIAL,
+          ...saved.view,
+          suggestions: guidedSuggestions(saved.view.story, saved.view.suggestions),
+          notice: '已恢复上次的剧情，接着聊吧。',
+        };
       }
     } catch {
       this.snapshot = { ...INITIAL, saveNotice: '无法读取本机存档，已回到开场。' };

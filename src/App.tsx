@@ -311,7 +311,11 @@ export function App() {
             )}
           </div>
         </div>
-        <Suggestions values={state.suggestions} onChoose={(value) => send(value)} />
+        <Suggestions
+          values={state.suggestions}
+          story={state.story}
+          onChoose={(value) => send(value)}
+        />
         <form
           className="composer"
           onSubmit={(event) => {

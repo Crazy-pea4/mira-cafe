@@ -1,6 +1,8 @@
 import type { StoryContext } from '../shared/story';
 import { inputBoundary } from './story';
+import { progressTarget } from '../shared/story-progression';
 export function storyPrompt(context: StoryContext, input = ''): string {
+  const target = progressTarget(context, input);
   const discussReply =
     !context.ending &&
     context.allowedBeats.includes('commission') &&
@@ -53,6 +55,7 @@ export function storyPrompt(context: StoryContext, input = ''): string {
       }) +
       '；示例仅展示问答衔接，不要照搬玩家未说过的经历。',
     '顶层suggestions返回恰好3条可选的用户下一句回应，每条2–26字、互不重复、自然且方向不同；结合本次实际对白和完成后的状态，不限定用户只能选它们、不替用户已经说过。不要泄露尚未讲出的背景，不写技术标签或结局编号。建议不必都是问题。',
+    '尚无结局且玩家没有要求停下时，下一组三条建议至少有一条能够自然引出下一个未呈现事实；其余保留闲聊和其他选择。不要让三个建议都只反复讨论“犹豫/没回消息”。自由输入和选项完全等价：根据当前剧情理解询问、愿意听下去、回应和建议的意图，不要求逐字口令；每次仍只讲一个符合前置条件的新事实。',
     '完整格式示例：' +
       JSON.stringify({
         segments: [
@@ -99,6 +102,11 @@ export function storyPrompt(context: StoryContext, input = ''): string {
       ? '本轮承接点：玩家正在回应已经出现的旅馆来信或未回复的犹豫。请回答原因，让Mira自然讲明第一份有偿摄影委托、明早七点和照片里的小旅馆，并用commission标记这一事实；不要只再次说“还没回复/正在犹豫”，不要重复手机消息，也不能越级透露拍人的担心。若当前用户实际上拒绝/转移话题或含义不明，仍先尊重或澄清，不替玩家决定。'
       : '本轮按玩家实际话题回应，不因回合数量推进事实。',
     followup ? '本轮承接点：' + followup[2] : '',
+    target
+      ? '本轮输入已表达可推进方向：' +
+        target.beat +
+        '。先回应玩家原意，再完整自然讲出这一事实并标记对应beat；不重复已知事实，不要求玩家再确认一次，不越级。若是结局建议，由Mira说明自己的决定与回信。'
+      : '',
     context.lastAskedQuestion
       ? '上一轮Mira已经提问，本轮优先回应或说自己的看法，只有真正歧义才再澄清。'
       : '这一轮可以自然回应，不需要为了推动故事而强行问问题。',

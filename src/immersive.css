@@ -176,6 +176,22 @@ body,
 .suggestions button:hover {
   background: #ead7bd20;
 }
+.suggestions button.story-progress {
+  color: #fff0dc;
+  background: linear-gradient(110deg, #d6aa6552, #bc925d26);
+  border-color: #f0c784a8;
+  box-shadow:
+    inset 0 0 16px #edc48612,
+    0 0 13px #e9b36424;
+}
+.suggestions button.story-progress:hover {
+  background: linear-gradient(110deg, #d6aa6575, #bc925d40);
+  border-color: #f4d39b;
+}
+.suggestions button.story-progress span,
+.suggestions button.story-progress b {
+  color: #ffe0a7;
+}
 .composer {
   flex-shrink: 0;
   gap: 10px;

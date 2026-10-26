@@ -39,7 +39,12 @@ export class MockProvider implements DialogueProvider {
       throw new ProviderError('TIMEOUT', '模拟模型超时。可以重试这一句。');
     if (request.fault === 'error')
       throw new ProviderError('UNAVAILABLE', '模拟服务暂时不可用。重试后继续。');
-    if (request.storyContext) return mockStoryReply(request, request.storyContext);
+    if (request.storyContext)
+      return authorStory(
+        request.storyContext,
+        mockStoryReply(request, request.storyContext),
+        request.text,
+      );
     if (/照片|相机|摄影|拍|photo/i.test(request.text))
       return {
         segments: [
