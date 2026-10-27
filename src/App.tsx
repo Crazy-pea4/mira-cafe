@@ -21,6 +21,9 @@ import { ModeBadge } from './ModeBadge';
 import { SCENE_ARTWORK } from './scene-artwork';
 import { SceneBackground } from './SceneBackground';
 import { UserMessage, type InputSource } from './UserMessage';
+import { InteractionTiming } from './core/interaction-timing';
+import { TimingDebugPanel } from './TimingDebugPanel';
+import { PcmSpeechPlayer } from './core/pcm-playback';
 const STATUS = {
   idle: '在等你开口',
   listening: '正在倾听',
@@ -30,13 +33,15 @@ const STATUS = {
   error: '连接暂时中断',
 };
 export function App() {
-  const [{ engine, audio, entry, call }] = useState(() => {
-    const audio = new SceneAudio(),
-      voice = new VoiceInput(new LocalSpeechTransport());
+  const [{ engine, audio, entry, call, timing }] = useState(() => {
+    const timing = new InteractionTiming();
+    const speech = new LocalSpeechTransport(undefined, undefined, timing);
+    const audio = new SceneAudio(undefined, new PcmSpeechPlayer(speech), timing),
+      voice = new VoiceInput(speech);
     const entry = new VoiceEntry(voice, prepareMicrophone);
     return {
       engine: new ConversationEngine(
-        new HttpTransport(),
+        new HttpTransport(timing),
         audio,
         undefined,
         undefined,
@@ -45,7 +50,8 @@ export function App() {
       ),
       audio,
       entry,
-      call: new VoiceCall(new LocalSpeechTransport()),
+      call: new VoiceCall(speech),
+      timing,
     };
   });
   const state = useSyncExternalStore(engine.subscribe, engine.getSnapshot, engine.getSnapshot);
@@ -98,6 +104,7 @@ export function App() {
         setAuthentication(d.authentication?.required === true);
         entry.configure(d.speechAvailable === true, d.speech === 'qwen');
         audio.live = !!d.speechAvailable;
+        timing.configure(d.provider === 'deepseek', d.speechAvailable === true);
       })
       .catch(() => {
         if (!controller.signal.aborted) entry.unavailable();
@@ -130,7 +137,7 @@ export function App() {
       window.removeEventListener('blur', blur);
       window.removeEventListener('offline', offline);
     };
-  }, [engine, entry, audio, call]);
+  }, [engine, entry, audio, call, timing]);
   const send = (value: string, source: InputSource = 'text') => {
     if (!value.trim() || value.trim().length > 800) return;
     setInputSource(source);
@@ -184,6 +191,7 @@ export function App() {
         </a>
         <div className="top-actions">
           <ModeBadge provider={provider} />
+          <TimingDebugPanel timing={timing} />
           <button
             className="reset-story leave-cafe"
             type="button"

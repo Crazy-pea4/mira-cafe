@@ -8,6 +8,7 @@ import {
 } from '../../shared/speech-protocol';
 import { abortError } from '../../shared/async';
 import { normalizeTranscript } from '../../shared/transcript';
+import type { InteractionTiming } from './interaction-timing';
 export interface BrowserWire {
   readyState: number;
   bufferedAmount: number;
@@ -48,6 +49,7 @@ export class LocalSpeechTransport implements SpeechTransport {
     private factory: BrowserWireFactory = nativeFactory,
     private endpoint = () =>
       (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + appPath('api/speech'),
+    private timing?: InteractionTiming,
   ) {}
   private connect(
     turnId: number,
@@ -56,20 +58,25 @@ export class LocalSpeechTransport implements SpeechTransport {
     text?: string,
     audio?: (pcm: Uint8Array) => void,
   ) {
+    const timing = this.timing?.begin(start === 'asr.start' ? 'asr' : 'tts', turnId);
     const requestId = crypto.randomUUID(),
       ready = deferred<void>(),
       done = deferred<string>();
     if (signal.aborted) {
+      timing?.finish('cancelled');
       ready.reject(abortError());
       done.reject(abortError());
       return { ready: ready.promise, done: done.promise, send: (_event: object) => {} };
     }
-    const socket = this.factory(this.endpoint());
+    let socket: BrowserWire;
+    try { socket = this.factory(this.endpoint()); }
+    catch (error) { timing?.finish('error'); throw error; }
     let closed = false,
       transcript = '';
     const finish = (error?: Error) => {
       if (closed) return;
       closed = true;
+      timing?.finish(error ? error.name === 'AbortError' ? 'cancelled' : 'error' : 'complete');
       clearTimeout(timer);
       signal.removeEventListener('abort', cancel);
       error
@@ -89,6 +96,7 @@ export class LocalSpeechTransport implements SpeechTransport {
       }
       try {
         socket.send(JSON.stringify({ requestId, turnId, ...fields }));
+        if ((fields as { type?: string }).type === 'asr.commit') timing?.mark('commit');
       } catch {
         const error = new Error('语音发送失败，请重试。');
         finish(error);
@@ -126,11 +134,16 @@ export class LocalSpeechTransport implements SpeechTransport {
         return;
       }
       if (event.requestId !== requestId || event.turnId !== turnId) return;
-      if (event.type === 'ready') ready.resolve();
+      if (event.type === 'ready') {
+        timing?.mark('ready');
+        ready.resolve();
+      }
       if (event.type === 'transcript') transcript = event.text;
       if (event.type === 'audio') {
         try {
-          audio?.(base64ToBytes(event.audio));
+          const pcm = base64ToBytes(event.audio);
+          if (pcm.length && pcm.length % 2 === 0) timing?.mark('firstAudio');
+          audio?.(pcm);
         } catch {
           finish(new Error('语音播放数据异常，已保留文字。'));
         }

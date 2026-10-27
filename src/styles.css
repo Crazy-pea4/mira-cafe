@@ -8,6 +8,120 @@
   font-size: 14px;
   color-scheme: dark;
 }
+.timing-debug summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 8px;
+  border: 1px solid #b4977045;
+  border-radius: 7px;
+  color: #d7c1a5;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.timing-debug summary::-webkit-details-marker {
+  display: none;
+}
+.timing-debug[open] summary {
+  background: #b4977026;
+}
+.timing-debug summary:focus-visible {
+  outline: 2px solid #e8bd8b;
+  outline-offset: 3px;
+}
+.timing-panel {
+  position: fixed;
+  z-index: 80;
+  top: max(64px, calc(env(safe-area-inset-top) + 48px));
+  right: max(12px, env(safe-area-inset-right));
+  width: min(420px, calc(100vw - 24px));
+  max-height: calc(100dvh - max(64px, calc(env(safe-area-inset-top) + 48px)) - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+  border: 1px solid #8e78614f;
+  border-radius: 12px;
+  background: #191e2bf5;
+  box-shadow: 0 12px 40px #0008;
+  color: #e8dfd1;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.timing-heading,
+.timing-record-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.timing-heading h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+}
+.timing-heading button {
+  padding: 6px 8px;
+  background: #b4977026;
+  border-radius: 5px;
+  font-size: 11px;
+}
+.timing-description,
+.timing-footnote,
+.timing-empty {
+  color: #adaaa6;
+  margin: 12px 0;
+}
+.timing-first-audio {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px 12px;
+  padding: 12px;
+  border: 1px solid #b4977052;
+  border-radius: 8px;
+  background: #b4977012;
+}
+.timing-first-audio strong {
+  color: #e8bd8b;
+  font-variant-numeric: tabular-nums;
+}
+.timing-first-audio small {
+  grid-column: 1 / -1;
+  color: #adaaa6;
+}
+.timing-records {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+.timing-records li {
+  border: 1px solid #c4b49c24;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.timing-record-heading span,
+.timing-records li > small {
+  font-size: 10px;
+  color: #b5b0a8;
+}
+.timing-records [data-status='error'] {
+  border-color: #ca8c775e;
+}
+.timing-records dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 8px 0 0;
+}
+.timing-records dt {
+  color: #b5b0a8;
+  font-size: 10px;
+}
+.timing-records dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  color: #ead5b7;
+}
 * {
   box-sizing: border-box;
 }

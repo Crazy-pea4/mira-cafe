@@ -516,6 +516,36 @@ body,
   font-size: 11px;
   backdrop-filter: blur(5px);
 }
+.app .topbar:has(.timing-debug[open]) {
+  z-index: 90;
+}
+@media (max-width: 520px) {
+  .app .topbar {
+    column-gap: 8px;
+  }
+  .app .topbar .top-actions {
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .app .topbar .mode-chip {
+    white-space: nowrap;
+    font-size: 9px;
+    letter-spacing: 0;
+    gap: 4px;
+  }
+  .app .topbar .timing-debug summary {
+    font-size: 10px;
+    padding: 8px 6px;
+  }
+  .app .topbar .leave-cafe {
+    white-space: nowrap;
+  }
+}
+@media (max-width: 360px) {
+  .app .topbar .brand > span:last-child {
+    display: none;
+  }
+}
 .reset-story {
   white-space: nowrap;
 }

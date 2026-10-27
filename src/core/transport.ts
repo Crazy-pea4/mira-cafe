@@ -7,6 +7,7 @@ import {
   type PresentationResponse,
 } from '../../shared/story';
 import { abortError } from '../../shared/async';
+import type { InteractionTiming } from './interaction-timing';
 export interface Transport {
   turn(request: TurnRequest, signal: AbortSignal, onText?: (text: string) => void): Promise<TurnResponse>;
   presented?(receipt: Presentation): Promise<PresentationResponse>;
@@ -15,6 +16,7 @@ export interface Transport {
 export class HttpTransport implements Transport {
   private controls: Promise<void> = Promise.resolve();
   private unsynced = new Set<string>();
+  constructor(private timing?: InteractionTiming) {}
   private enqueue<T>(work: () => Promise<T>): Promise<T> {
     const result = this.controls.then(work);
     this.controls = result.then(
@@ -69,6 +71,7 @@ export class HttpTransport implements Transport {
     if (signal.aborted) throw abortError();
     if (this.unsynced.has(request.sessionId))
       throw new Error('这段对白暂时没能同步。请刷新，恢复上次保存的进度。');
+    const timing = this.timing?.begin('model', request.turnId);
     const controller = new AbortController();
     const cancel = () => controller.abort();
     signal.addEventListener('abort', cancel, { once: true });
@@ -94,9 +97,15 @@ export class HttpTransport implements Transport {
           const turnId = event.type === 'reply' ? event.reply.turnId : event.turnId;
           if (turnId !== request.turnId) throw new Error('收到不匹配的回复，请重试。');
           if (signal.aborted) throw abortError();
-          if (event.type === 'text') onText?.(event.text);
+          if (event.type === 'text') {
+            if (event.text) timing?.mark('firstText');
+            onText?.(event.text);
+          }
           if (event.type === 'error') throw new Error(event.error.message);
-          if (event.type === 'reply') return event.reply;
+          if (event.type === 'reply') {
+            timing?.finish('complete');
+            return event.reply;
+          }
         }
         throw new Error('回复传输中断，请重试这一句。');
       }
@@ -104,8 +113,11 @@ export class HttpTransport implements Transport {
       if (!response.ok) throw new Error(data.error?.message ?? '连接失败，请重试。');
       const parsed = turnResponseSchema.safeParse(data);
       if (!parsed.success) throw new Error('角色回复格式异常，请重试。');
+      if (parsed.data.turnId !== request.turnId) throw new Error('收到不匹配的回复，请重试。');
+      timing?.finish('complete');
       return parsed.data;
     } catch (error) {
+      timing?.finish(signal.aborted ? 'cancelled' : 'error');
       if (signal.aborted) throw abortError();
       if (timedOut) throw new Error('连接超时，请重试。');
       if (error instanceof TypeError) throw new Error('无法连接本地服务，请确认服务已启动后重试。');
