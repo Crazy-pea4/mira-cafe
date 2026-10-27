@@ -1,12 +1,16 @@
 # 当前检查点 · 2026-10-27
 
+- 已对照原始六页PDF核对核心、交付及全部29条可选扩展，见[考核要求核对](docs/ASSESSMENT_AUDIT.md)。本轮只更新文档，没有新增功能或重跑收费验收。仍需实机确认、视频实际交付、总投入粗估及同步待推送提交；优先工程扩展为阶段延迟展示和简单观测页面。
+
+- 最新线上版本为`edbc78e`：邀请密码页新增付费API访问保护说明；8项认证测试、构建、本地及Linux部署检查通过，线上四尺寸及登录退出检查完成，原站路由独立补查一致。该文案更新不代表重新验证全部模型和语音能力，具体记录见[DEPLOYMENT_STATUS](docs/DEPLOYMENT_STATUS.md)。
+
 - 本地已迁移至Docker Compose，统一入口为http://127.0.0.1:5173/，当前使用现有密钥运行真实配置，默认命令仍可无密钥启动Mock；旧宿主机3001/3002进程已退出。容器内379项测试、类型/构建及30项部署检查通过，Mock完整A结局、转场、热更新、容器重建后签名剧情恢复与四尺寸通过。真实文字探针仅1次DeepSeek、13次增量事件，未新增ASR/TTS。服务器仍按原Node/systemd/nginx部署，本次没有更改线上。见 [DOCKER](docs/DOCKER.md)。
 
-- 最新线上版本 `31bdece`：发布前38文件379项测试、本地30项部署检查、Linux root与受限账号各30项通过；真实线上新增3次DeepSeek、1次合成音频ASR、4次TTS，三次SSE回复、56次文字变化及4份回执200。电话自动提交一轮、播放中点击打断与后续对话通过，登录/刷新/退出和四尺寸通过，原站7条路径摘要一致。ComfyUI保持关闭，未安装Docker。发布与检查记录见 [DEPLOYMENT_STATUS](docs/DEPLOYMENT_STATUS.md)。
+- 核心功能发布版本 `31bdece`：发布前38文件379项测试、本地30项部署检查、Linux root与受限账号各30项通过；真实线上新增3次DeepSeek、1次合成音频ASR、4次TTS，三次SSE回复、56次文字变化及4份回执200。电话自动提交一轮、播放中点击打断与后续对话通过，登录/刷新/退出和四尺寸通过，原站7条路径摘要一致。ComfyUI保持关闭，未安装Docker。发布与检查记录见 [DEPLOYMENT_STATUS](docs/DEPLOYMENT_STATUS.md)。
 
 - ComfyUI继续仅提供服务端适配层与离线Mock示例，主应用和服务器均不启用生图；不另装ComfyUI、模型或GPU服务，未真实联调。新增18项适配回归、全量38文件379项、两种构建及30项部署检查通过。代码与接入边界见 [COMFYUI_ADAPTER](docs/COMFYUI_ADAPTER.md)。
 
-核心 MVP 已实现，已开放私密线上评审，线上应用为 `31bdece`，已包含剧情场景切换、电话式实时语音与流式文字，见 [SCENE_TRANSITION](docs/SCENE_TRANSITION.md)、[VOICE_CALL](docs/VOICE_CALL.md) 和 [STREAMING](docs/STREAMING.md)。当前统一验收见 [RELEASE_ACCEPTANCE](docs/RELEASE_ACCEPTANCE.md)。
+核心 MVP 已实现，已开放私密线上评审，线上应用为 `edbc78e`，已包含剧情场景切换、电话式实时语音与流式文字，见 [SCENE_TRANSITION](docs/SCENE_TRANSITION.md)、[VOICE_CALL](docs/VOICE_CALL.md) 和 [STREAMING](docs/STREAMING.md)。当前统一验收见 [RELEASE_ACCEPTANCE](docs/RELEASE_ACCEPTANCE.md)。
 
 - 最新流式文字：DeepSeek增量到达页面，未确认文字不执行动作或写入存档，保持校验后按句TTS与呈现回执。37文件361项、两种构建和30项部署检查通过；本地SSE替身与合成PCM的完整A结局、打断、断流重试和四种尺寸通过，真实API新链路已在本次发布后验证，既有交付录屏尚未覆盖。
 
