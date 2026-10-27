@@ -120,6 +120,14 @@ ComfyUI按用户决定仅预留服务端接口适配层：支持工作流参数�
 
 ## 验证与交付材料
 
+正式自动化测试使用Vitest，测试代码随仓库保存在`tests/`，配置见[vitest.config.ts](vitest.config.ts)，覆盖`.test.ts`与`.test.tsx`。重点覆盖流式协议、快速连续输入、打断与迟到回调、语音状态、呈现回执、存档恢复及失败降级。已启动本地Docker后可执行：
+
+```sh
+docker compose exec -T app npm test
+```
+
+`npm run check`会依次执行类型检查、Vitest与生产构建。题目把自动化测试列为可选工程扩展，没有指定测试框架或要求单独测试报告；本项目已实现并交付测试源码。目前没有配置CI，测试需通过上述命令运行。一次性浏览器/部署验证脚本完成后清理，不作为正式回归测试积压在.local。
+
 ```sh
 npm run check
 npm run build:deploy
