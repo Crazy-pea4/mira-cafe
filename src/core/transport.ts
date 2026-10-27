@@ -12,11 +12,13 @@ export interface Transport {
   turn(request: TurnRequest, signal: AbortSignal, onText?: (text: string) => void): Promise<TurnResponse>;
   presented?(receipt: Presentation): Promise<PresentationResponse>;
   cancel(sessionId: string, throughTurnId: number): Promise<void>;
+  reset?(): Promise<void>;
 }
 export class HttpTransport implements Transport {
   private controls: Promise<void> = Promise.resolve();
   private unsynced = new Set<string>();
-  constructor(private timing?: InteractionTiming) {}
+  private resetFailed = false;
+  constructor(private timing?: InteractionTiming, private persistent = false) {}
   private enqueue<T>(work: () => Promise<T>): Promise<T> {
     const result = this.controls.then(work);
     this.controls = result.then(
@@ -24,6 +26,19 @@ export class HttpTransport implements Transport {
       () => {},
     );
     return result;
+  }
+  reset(): Promise<void> {
+    if (!this.persistent) return Promise.resolve();
+    return this.enqueue(async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10000);
+      try {
+        const response = await fetch(appPath('api/progress'), { method: 'DELETE', signal: controller.signal });
+        if (!response.ok) throw new Error('进度暂时未能重置，请刷新后重试。');
+        this.resetFailed = false;
+      } catch (error) { this.resetFailed = true; throw error; }
+      finally { clearTimeout(timer); }
+    });
   }
   presented(receipt: Presentation): Promise<PresentationResponse> {
     return this.enqueue(async () => {
@@ -69,7 +84,7 @@ export class HttpTransport implements Transport {
   async turn(request: TurnRequest, signal: AbortSignal, onText?: (text: string) => void) {
     await this.controls;
     if (signal.aborted) throw abortError();
-    if (this.unsynced.has(request.sessionId))
+    if (this.unsynced.has(request.sessionId) || this.resetFailed)
       throw new Error('这段对白暂时没能同步。请刷新，恢复上次保存的进度。');
     const timing = this.timing?.begin('model', request.turnId);
     const controller = new AbortController();

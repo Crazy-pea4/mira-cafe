@@ -392,6 +392,9 @@ export class ConversationEngine {
     this.committedProps = { ...INITIAL_PROPS };
     this.committedLocation = 'cafe';
     this.update({ ...INITIAL, turnId: this.snapshot.turnId });
+    if (this.transport.reset) void this.transport.reset().catch(() => {
+      this.update({ saveNotice: '服务端进度暂时未能重置，请刷新后重试。' });
+    });
     try {
       this.saves?.clear();
     } catch {

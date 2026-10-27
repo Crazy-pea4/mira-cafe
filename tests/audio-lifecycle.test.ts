@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { App } from '../src/App';
+import { App, Scene } from '../src/App';
 import { ModeBadge } from '../src/ModeBadge';
 import { bindAudioLifecycle } from '../src/core/audio-lifecycle';
 import { SceneAudio } from '../src/core/scene-audio';
@@ -69,7 +69,9 @@ describe('trusted interaction and page lifecycle, fake audio only', () => {
     vi.stubGlobal('WebSocket', socket);
     vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: device } });
     vi.stubGlobal('window', { speechSynthesis: { speak } });
-    const html = renderToStaticMarkup(createElement(App));
+    const loading = renderToStaticMarkup(createElement(App));
+    expect(loading).toContain('正在恢复咖啡馆进度');
+    const html = renderToStaticMarkup(createElement(Scene, { initialProgress: null, initialNotice: '' }));
     expect(html).toContain('aria-label="故事进度"');
     expect(html).not.toMatch(/hud-toggle|hud-collapsed|收起对话|展开对话|aria-expanded/);
     expect(html).toContain('雨停之前');

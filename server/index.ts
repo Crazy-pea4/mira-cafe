@@ -6,12 +6,12 @@ import { buildApp } from './app';
 import { DeepSeekProvider, MockProvider } from './providers';
 import { resolveConfig } from './config';
 import { QwenSpeechProvider } from './qwen';
-import { RequestAudit, FileAuditStore } from './request-audit';
+import { RequestAudit } from './request-audit';
 import { auditDialogue, auditSpeech } from './audit-providers';
 import { logFacts } from './safe-log';
 import { retryDialogue } from './retry-dialogue';
-import { writeReplyDiagnostic } from './reply-diagnostics';
 import { loadStorySaveKey } from './story-save';
+import { AppDatabase } from './database';
 // .env is loaded only by the separate, explicitly selected start:configured command.
 const config = resolveConfig(process.env);
 const deployment = resolveDeployment(process.env);
@@ -22,12 +22,14 @@ if (
 )
   throw new Error('Public deployment requires both live providers');
 const stateDir = resolve(process.env.MIRA_STATE_DIR ?? '.local');
-const audit = new RequestAudit(new FileAuditStore(resolve(stateDir, 'budget.json')));
+const database = new AppDatabase(resolve(stateDir, 'mira.sqlite'));
+database.importLegacy(stateDir);
+const audit = new RequestAudit(database);
 const provider = config.deepseek
   ? retryDialogue(
       auditDialogue(
         new DeepSeekProvider(config.deepseek.apiKey, config.deepseek.model, fetch, (facts) =>
-          writeReplyDiagnostic(facts, resolve(stateDir, 'last-reply-diagnostic.json')),
+          database.diagnostic(facts),
         ),
         audit,
       ),
@@ -36,7 +38,8 @@ const provider = config.deepseek
 const speech = config.qwen ? auditSpeech(new QwenSpeechProvider(config.qwen), audit) : undefined;
 const saveKey =
   deployment.auth?.passwordHash ?? loadStorySaveKey(resolve(stateDir, 'story-save.key'));
-const app = buildApp(provider, 18000, speech, audit, deployment, saveKey);
+const app = buildApp(provider, 18000, speech, audit, deployment, saveKey, database);
+app.addHook('onClose', async () => database.close());
 const dist = resolve(process.env.MIRA_STATIC_DIR ?? 'dist');
 if (existsSync(dist)) await registerWeb(app, dist, deployment.basePath);
 else if (deployment.publicOrigin) throw new Error('Deployment client build is missing');

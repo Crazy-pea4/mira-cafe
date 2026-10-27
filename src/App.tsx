@@ -24,6 +24,9 @@ import { UserMessage, type InputSource } from './UserMessage';
 import { InteractionTiming } from './core/interaction-timing';
 import { TimingDebugPanel } from './TimingDebugPanel';
 import { PcmSpeechPlayer } from './core/pcm-playback';
+import { loadServerProgress } from './core/server-progress';
+import { persistTimings } from './core/persist-timings';
+import type { SavedProgress } from '../shared/progress';
 const STATUS = {
   idle: '在等你开口',
   listening: '正在倾听',
@@ -33,6 +36,25 @@ const STATUS = {
   error: '连接暂时中断',
 };
 export function App() {
+  const [loaded, setLoaded] = useState<{ progress: SavedProgress | null; notice: string } | null>(null);
+  const [failure, setFailure] = useState(''), [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    setFailure('');
+    void loadServerProgress(controller.signal).then(value => {
+      if (!controller.signal.aborted) setLoaded(value);
+    }).catch(error => {
+      if (!controller.signal.aborted) setFailure(error instanceof Error ? error.message : '无法加载进度。');
+    });
+    return () => controller.abort();
+  }, [attempt]);
+  if (!loaded) return <main className="storage-loading" role="status">
+    <h1>Mira Café</h1><p>{failure || '正在恢复咖啡馆进度…'}</p>
+    {failure && <button type="button" onClick={() => setAttempt(value => value + 1)}>重新连接</button>}
+  </main>;
+  return <Scene initialProgress={loaded.progress} initialNotice={loaded.notice} />;
+}
+export function Scene({ initialProgress, initialNotice }: { initialProgress: SavedProgress | null; initialNotice: string }) {
   const [{ engine, audio, entry, call, timing }] = useState(() => {
     const timing = new InteractionTiming();
     const speech = new LocalSpeechTransport(undefined, undefined, timing);
@@ -41,12 +63,12 @@ export function App() {
     const entry = new VoiceEntry(voice, prepareMicrophone);
     return {
       engine: new ConversationEngine(
-        new HttpTransport(timing),
+        new HttpTransport(timing, true),
         audio,
         undefined,
         undefined,
         undefined,
-        new LocalProgressStorage(),
+        new LocalProgressStorage(undefined, initialProgress),
       ),
       audio,
       entry,
@@ -57,6 +79,7 @@ export function App() {
   const state = useSyncExternalStore(engine.subscribe, engine.getSnapshot, engine.getSnapshot);
   const input = useSyncExternalStore(entry.subscribe, entry.getSnapshot, entry.getSnapshot);
   const callState = useSyncExternalStore(call.subscribe, call.getSnapshot, call.getSnapshot);
+  useEffect(() => persistTimings(timing), [timing]);
   const voiceButton = voiceButtonView(input);
   const sceneRef = useRef<HTMLElement>(null),
     hudRef = useRef<HTMLElement>(null),
@@ -196,7 +219,7 @@ export function App() {
             className="reset-story leave-cafe"
             type="button"
             onClick={() => {
-              if (!window.confirm('重置剧情并清除本机存档？将从咖啡馆开场重新开始。')) return;
+              if (!window.confirm('重置当前剧情？将从咖啡馆开场重新开始。')) return;
               entry.cancel();
               call.stop();
               engine.reset();
@@ -349,6 +372,7 @@ export function App() {
                 {state.saveNotice}
               </div>
             )}
+            {initialNotice && <div className="notice" role="status">{initialNotice}</div>}
             {state.location === 'lodge' && backgroundStatus !== 'ready' && (
               <div className="notice scene-notice" role="status">
                 {backgroundStatus === 'failed'

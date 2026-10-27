@@ -30,7 +30,8 @@ export function TimingDebugPanel({ timing }: { timing: InteractionTiming }) {
           <h2>语音耗时</h2>
           <button type="button" onClick={timing.clear}>清空记录</button>
         </div>
-        <p className="timing-description">仅保留本页最近20个阶段，不保存对白和音频。打开面板不会额外请求服务。</p>
+        <p className="timing-description">显示本页最近20个阶段，结束后的数值摘要保存到数据库，不保存对白和音频。打开面板不会调用模型或语音服务。</p>
+        {timing.storageNotice && <p className="timing-footnote" role="status">{timing.storageNotice}</p>}
         {latestModel && (
           <div className="timing-first-audio">
             <span>最近回复首声 · 第{latestModel.turnId}轮</span>

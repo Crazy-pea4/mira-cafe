@@ -15,7 +15,7 @@ import { z } from 'zod';
 export type BillableService = 'deepseek' | 'asr' | 'tts';
 // Compatibility weights for the existing v1 counter file, not prices or spending limits.
 const LEGACY_WEIGHTS = { deepseek: 200000, asr: 20000, tts: 40000 } as const;
-const stateSchema = z
+export const auditStateSchema = z
   .object({
     version: z.literal(1),
     requests: z
@@ -34,7 +34,7 @@ const stateSchema = z
       state.requests.deepseek * 200000 + state.requests.asr * 20000 + state.requests.tts * 40000,
     'Inconsistent budget ledger',
   );
-type Ledger = z.infer<typeof stateSchema>;
+export type Ledger = z.infer<typeof auditStateSchema>;
 const fresh = (): Ledger => ({
   version: 1,
   requests: { deepseek: 0, asr: 0, tts: 0 },
@@ -56,14 +56,14 @@ export class MemoryAuditStore implements AuditStore {
     return structuredClone(this.state);
   }
   update(change: (state: Ledger) => Ledger) {
-    this.state = stateSchema.parse(change(this.read()));
+    this.state = auditStateSchema.parse(change(this.read()));
   }
 }
 export class FileAuditStore implements AuditStore {
   constructor(private path: string) {}
   read() {
     return existsSync(this.path)
-      ? stateSchema.parse(JSON.parse(readFileSync(this.path, 'utf8')))
+      ? auditStateSchema.parse(JSON.parse(readFileSync(this.path, 'utf8')))
       : fresh();
   }
   update(change: (state: Ledger) => Ledger) {
@@ -77,7 +77,7 @@ export class FileAuditStore implements AuditStore {
     }
     const temp = this.path + '.' + randomUUID() + '.tmp';
     try {
-      const next = stateSchema.parse(change(this.read()));
+      const next = auditStateSchema.parse(change(this.read()));
       writeFileSync(temp, JSON.stringify(next), { mode: 0o600, flag: 'wx' });
       const dataFd = openSync(temp, 'r');
       try {

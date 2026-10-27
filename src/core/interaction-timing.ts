@@ -19,6 +19,7 @@ export type TimingSpan = {
 // Page-local numeric observations only. No prompts, transcripts, PCM or secrets.
 // Handles to cleared/evicted/completed spans can never revive old observations.
 export class InteractionTiming {
+  storageNotice = '';
   private records: readonly TimingRecord[] = [];
   private listeners = new Set<() => void>();
   private nextId = 0;
@@ -33,6 +34,10 @@ export class InteractionTiming {
   configure(modelLive: boolean, speechLive: boolean) {
     this.modelMode = modelLive ? 'live' : 'mock';
     this.speechMode = speechLive ? 'live' : 'mock';
+  }
+  setStorageNotice(message: string) {
+    if (this.storageNotice === message) return;
+    this.storageNotice = message; this.records = [...this.records]; this.publish();
   }
   clear = () => {
     this.records = [];

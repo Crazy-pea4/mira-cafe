@@ -22,6 +22,10 @@ import { withAbort } from '../shared/abortable';
 import { randomBytes } from 'node:crypto';
 import { storySaves } from './story-save';
 import { type DialogueProvider, MockProvider, ProviderError } from './providers';
+import { AppDatabase, StorageConflict, type StoredConversation } from './database';
+import { confirmedProgress } from './persisted-progress';
+import { progressSchema } from '../shared/progress';
+import { timingBatchSchema } from '../shared/timing';
 type Session = {
   owner: string | null;
   latest: number;
@@ -30,6 +34,7 @@ type Session = {
   active?: AbortController;
   story: StoryState;
   pending?: PendingStory;
+  stored?: StoredConversation;
 };
 export function buildApp(
   provider: DialogueProvider = new MockProvider(),
@@ -38,6 +43,7 @@ export function buildApp(
   audit?: RequestAudit,
   deployment: Deployment = { basePath: '' },
   saveKey = randomBytes(32).toString('hex'),
+  database?: AppDatabase,
 ) {
   const app = Fastify({
     logger: false,
@@ -45,7 +51,7 @@ export function buildApp(
     trustProxy: deployment.auth ? '127.0.0.1' : false,
   });
   const path = (suffix: string) => withBasePath(deployment.basePath, suffix);
-  const access = registerAccess(app, deployment);
+  const access = registerAccess(app, deployment, database);
   registerSpeech(app, speechProvider, {
     basePath: deployment.basePath,
     publicOrigin: deployment.publicOrigin,
@@ -55,9 +61,10 @@ export function buildApp(
     originAllowed(value, host, deployment.publicOrigin);
   const sessionKey = (id: string, owner: string | null) => (owner ?? 'local') + ':' + id;
   const sessions = new Map<string, Session>();
+  const scope = deployment.basePath + ':' + provider.kind;
   const saves = storySaves(
     deployment.auth?.passwordHash ?? saveKey,
-    deployment.basePath + ':' + provider.kind,
+    scope,
   );
   function getSession(id: string, owner: string | null) {
     const key = sessionKey(id, owner);
@@ -68,11 +75,47 @@ export function buildApp(
         oldest[1].active?.abort();
         sessions.delete(oldest[0]);
       }
-      session = { owner, latest: 0, touched: Date.now(), started: false, story: newStory() };
+      const stored = database && owner ? database.current(owner, scope) : undefined;
+      session = { owner, latest: 0, touched: Date.now(), started: false, story: stored?.state ?? newStory(), stored };
       sessions.set(key, session);
     }
     session.touched = Date.now();
     return session;
+  }
+  if (database) {
+    app.setErrorHandler((error, _request, reply) => {
+      const status = (error as { statusCode?: number }).statusCode;
+      return reply.code(status === 400 || status === 413 ? status : 503).send({ error: { code: 'STORAGE_UNAVAILABLE', message: '数据暂时无法处理，请刷新后重试。' } });
+    });
+    app.addHook('preHandler', async (request, reply) => {
+      if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method) && !origin(request.headers.origin, request.headers.host))
+        return reply.code(403).send({ error: { code: 'ORIGIN' } });
+    });
+    app.get(path('api/progress'), async request => ({ progress: database.current(request.miraOwner!, scope).progress }));
+    app.post(path('api/progress'), async (request, reply) => {
+      const parsed = progressSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: { code: 'INVALID_SAVE' } });
+      const restored = saves.open(parsed.data.checkpoint);
+      if (!restored) return reply.code(400).send({ error: { code: 'INVALID_SAVE' } });
+      const current = database.current(request.miraOwner!, scope);
+      if (current.revision > 0 || current.progress || !database.canImport(request.miraOwner!, scope)) return { progress: current.progress };
+      const progress = { ...parsed.data, view: { ...parsed.data.view, story: { act: restored.act, facts: restored.facts, ending: restored.ending, planQuote: restored.planQuote, declined: restored.declined }, suggestions: restored.lastSuggestions } };
+      try { database.save(current, restored, progress); }
+      catch (error) { if (!(error instanceof StorageConflict)) throw error; }
+      return { progress: database.current(request.miraOwner!, scope).progress };
+    });
+    app.delete(path('api/progress'), async request => {
+      for (const [key, session] of sessions) if (session.owner === request.miraOwner) { session.active?.abort(); sessions.delete(key); }
+      database.reset(request.miraOwner!, scope);
+      return { ok: true };
+    });
+    app.post(path('api/timings'), async (request, reply) => {
+      const parsed = timingBatchSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: { code: 'INVALID_TIMING' } });
+      database.timings(request.miraOwner!, scope, parsed.data.pageId, parsed.data.records);
+      return { ok: true };
+    });
+    app.get(path('api/timings'), async request => ({ records: database.timingHistory(request.miraOwner!, scope) }));
   }
   const cleanup = setInterval(() => {
     for (const [id, session] of sessions)
@@ -94,6 +137,7 @@ export function buildApp(
     speechAvailable: !!speechProvider,
     usagePolicy: { localLimits: false },
     ...(audit ? { usage: audit.status() } : {}),
+    ...(database ? { storage: { engine: 'sqlite', schemaVersion: 1 } } : {}),
   }));
   app.post(path('api/cancel'), async (request, reply) => {
     const parsed = cancelSchema.safeParse(request.body);
@@ -101,7 +145,7 @@ export function buildApp(
       return reply
         .code(400)
         .send({ error: { code: 'BAD_REQUEST', message: '取消请求格式不正确。' } });
-    const session = getSession(parsed.data.sessionId, request.miraSession);
+    const session = getSession(parsed.data.sessionId, request.miraOwner ?? request.miraSession);
     if (parsed.data.throughTurnId >= session.latest) {
       session.active?.abort();
       session.pending = undefined;
@@ -114,15 +158,30 @@ export function buildApp(
       return reply.code(403).send({ error: { code: 'ORIGIN' } });
     const parsed = presentationSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: { code: 'BAD_PRESENTATION' } });
-    const session = sessions.get(sessionKey(parsed.data.sessionId, request.miraSession));
+    const session = sessions.get(sessionKey(parsed.data.sessionId, request.miraOwner ?? request.miraSession));
     if (
       !session?.pending ||
       session.latest !== parsed.data.turnId ||
       session.pending.turnId !== parsed.data.turnId
     )
       return reply.code(409).send({ error: { code: 'STALE_TURN' } });
+    const from = session.pending.through;
+    const previous = database ? structuredClone(session.story) : undefined;
     const ack = acknowledgeStory(session.story, session.pending, parsed.data.through);
     if (!ack) return reply.code(400).send({ error: { code: 'BAD_PRESENTATION' } });
+    if (database && session.stored && from < session.pending.through) {
+      const progress = confirmedProgress(session.story, saves.seal(session.story), session.pending, from, session.stored.progress);
+      try {
+        session.stored = database.save(session.stored, session.story, progress, session.pending.historyEntry ? {
+          key: parsed.data.sessionId + ':' + parsed.data.turnId,
+          user: session.pending.input, assistant: session.pending.historyEntry.content,
+        } : undefined);
+      } catch (error) {
+        session.story = previous!; session.pending = undefined;
+        if (error instanceof StorageConflict) return reply.code(409).send({ error: { code: 'PROGRESS_CHANGED', message: '其他页面已更新进度，请刷新后继续。' } });
+        throw error;
+      }
+    }
     session.touched = Date.now();
     return { ...ack, checkpoint: saves.seal(session.story) };
   });
@@ -148,13 +207,17 @@ export function buildApp(
           message: '这份剧情存档无法恢复，请点击“重置剧情”重新开始。',
         },
       });
-    const session = getSession(input.sessionId, request.miraSession);
+    const session = getSession(input.sessionId, request.miraOwner ?? request.miraSession);
     const stale = () =>
       reply.code(409).send({ error: { code: 'STALE_TURN', message: '这轮对话已经结束。' } });
     if (input.turnId <= session.latest) return stale();
     // A microphone press / page cleanup may have sent cancellation before the
     // first turn. That tombstone must not prevent checkpoint hydration.
-    if (!session.started && restored) session.story = restored;
+    if (!session.started && restored && !session.stored) session.story = restored;
+    if (!session.started && database && session.owner) {
+      session.stored = database.current(session.owner, scope);
+      session.story = session.stored.state;
+    }
     session.started = true;
     session.active?.abort();
     session.pending = undefined;

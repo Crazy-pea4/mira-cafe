@@ -3,9 +3,11 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Deployment } from './deployment';
 import { originAllowed } from './deployment';
 import { withBasePath } from '../shared/base-path';
+import type { AppDatabase } from './database';
 declare module 'fastify' {
   interface FastifyRequest {
     miraSession: string | null;
+    miraOwner: string | null;
   }
 }
 const SESSION_MS = 8 * 60 * 60_000;
@@ -41,13 +43,21 @@ function loginPage(base: string, error = '') {
   *{box-sizing:border-box}body{margin:0;min-height:100dvh;display:grid;place-items:center;padding:24px;background:#191c26;color:#eee1ce;font:16px system-ui}
   main{width:min(100%,360px)}small{letter-spacing:3px;color:#c2a787}h1{font:36px Georgia,serif;font-weight:400}p{line-height:1.8;color:#c7bdb2}label{display:block;margin:24px 0 8px}input,button{width:100%;min-height:48px;border-radius:9px;font:inherit}input{background:#252936;color:inherit;border:1px solid #a58b6e;padding:12px}button{margin-top:14px;border:0;background:#d8b789;color:#27232a;cursor:pointer}:focus-visible{outline:3px solid #f1cb93;outline-offset:4px}.access-note{margin-top:24px;padding:14px 16px;border:1px solid #51483e;border-radius:9px;background:#22232b;font-size:14px}.access-note strong{color:#d8b789;font-weight:500}.access-note p{margin:6px 0 0}.error{color:#f1b6a5}</style></head><body><main><small>MIRA CAFÉ</small><h1>雨停之前</h1><p>输入邀请密码，进来坐一会儿。</p><aside class="access-note" aria-label="演示访问保护"><strong>演示访问保护</strong><p>本演示调用付费 AI API，共享邀请密码仅用于防止接口被滥用，不涉及账号注册或个人账号登录。</p></aside>${error ? '<p class="error" role="alert">' + error + '</p>' : ''}<form method="post" action="${withBasePath(base, 'auth/login')}"><label for="password">邀请密码</label><input id="password" name="password" type="password" autocomplete="current-password" required maxlength="256"><button type="submit">进入咖啡馆</button></form></main></body></html>`;
 }
-export function registerAccess(app: FastifyInstance, deployment: Deployment) {
+export function registerAccess(app: FastifyInstance, deployment: Deployment, database?: AppDatabase) {
   const { basePath, publicOrigin, auth } = deployment;
   const path = (suffix: string) => withBasePath(basePath, suffix);
   const sessions = new Map<string, Session>();
   const failures = new Map<string, { attempts: number; until: number }>();
+  const credentialTag = auth ? digest(auth.passwordHash) : '';
+  const visitorCookie = (value: string) => `mira_visitor=${value}; Path=${path('')}; HttpOnly; SameSite=Strict; Max-Age=31536000${publicOrigin?.startsWith('https:') ? '; Secure' : ''}`;
+  const visitor = (request: FastifyRequest) => {
+    const values = (request.headers.cookie ?? '').split(';').map(value => value.trim()).filter(value => value.startsWith('mira_visitor='));
+    const token = values.length === 1 ? values[0].slice('mira_visitor='.length) : '';
+    return /^[A-Za-z0-9_-]{43}$/.test(token) ? database?.visitor(digest(token)) : undefined;
+  };
   let verifying = 0;
   function revoke(key: string) {
+    database?.revoke(key);
     const session = sessions.get(key);
     if (!session) return;
     sessions.delete(key);
@@ -56,6 +66,11 @@ export function registerAccess(app: FastifyInstance, deployment: Deployment) {
   }
   function active(key: string | null) {
     if (!auth) return true;
+    if (database) {
+      if (key && database.auth(key, credentialTag)) return true;
+      if (key) revoke(key);
+      return false;
+    }
     const session = key ? sessions.get(key) : undefined;
     if (session && session.expires > Date.now()) return true;
     if (key) revoke(key);
@@ -67,20 +82,39 @@ export function registerAccess(app: FastifyInstance, deployment: Deployment) {
       listener();
       return () => {};
     }
-    const session = sessions.get(key)!;
+    let session = sessions.get(key);
+    if (!session && database) {
+      const stored = database.auth(key, credentialTag)!;
+      const timer = setTimeout(() => revoke(key), Math.max(0, stored.expires - Date.now())).unref();
+      session = { expires: stored.expires, timer, listeners: new Set() };
+      sessions.set(key, session);
+    }
+    if (!session) { listener(); return () => {}; }
     session.listeners.add(listener);
     return () => {
       session.listeners.delete(listener);
     };
   };
   app.decorateRequest('miraSession', null);
+  app.decorateRequest('miraOwner', null);
   app.addHook('onRequest', async (request, reply) => {
     const pathname = request.url.split('?')[0];
     if (publicOrigin && request.headers.host !== new URL(publicOrigin).host)
       return reply.code(404).send();
     if (basePath && pathname !== basePath && !pathname.startsWith(basePath + '/'))
       return reply.code(404).send();
-    if (!auth) return;
+    if (!auth) {
+      if (database && pathname.startsWith(path('api/')) && pathname !== path('api/health')) {
+        let owner = visitor(request);
+        if (!owner) {
+          const token = randomBytes(32).toString('base64url');
+          owner = database.createVisitor(digest(token));
+          reply.header('Set-Cookie', visitorCookie(token));
+        }
+        request.miraOwner = owner;
+      }
+      return;
+    }
     reply
       .header('Cache-Control', 'no-store, private')
       .header('Vary', 'Cookie')
@@ -97,6 +131,7 @@ export function registerAccess(app: FastifyInstance, deployment: Deployment) {
     )
       return reply.code(403).send({ error: { code: 'ORIGIN', message: '请从当前页面操作。' } });
     request.miraSession = keyFor(request);
+    if (database && request.miraSession) request.miraOwner = database.auth(request.miraSession, credentialTag)?.owner ?? null;
     if (
       (request.method === 'GET' && (pathname === path('login') || pathname === basePath)) ||
       (request.method === 'POST' && pathname === path('auth/login'))
@@ -177,8 +212,18 @@ export function registerAccess(app: FastifyInstance, deployment: Deployment) {
         ttl = auth.sessionMs ?? SESSION_MS;
       const timer = setTimeout(() => revoke(key), ttl).unref();
       sessions.set(key, { expires: Date.now() + ttl, timer, listeners: new Set() });
+      const cookies = [cookie(token, Math.floor(ttl / 1000))];
+      if (database) {
+        let owner = visitor(request);
+        if (!owner) {
+          const visitorToken = randomBytes(32).toString('base64url');
+          owner = database.createVisitor(digest(visitorToken));
+          cookies.push(visitorCookie(visitorToken));
+        }
+        database.grant(key, owner, credentialTag, Date.now() + ttl);
+      }
       return reply
-        .header('Set-Cookie', cookie(token, Math.floor(ttl / 1000)))
+        .header('Set-Cookie', cookies.length === 1 ? cookies[0] : cookies)
         .redirect(path(''), 303);
     });
     app.post(path('auth/logout'), async (request, reply) => {
@@ -187,7 +232,11 @@ export function registerAccess(app: FastifyInstance, deployment: Deployment) {
     });
   }
   app.addHook('onClose', async () => {
-    for (const key of sessions.keys()) revoke(key);
+    for (const [key, session] of sessions) {
+      if (!database) revoke(key);
+      else { clearTimeout(session.timer); for (const listener of session.listeners) listener(); }
+    }
+    sessions.clear();
     failures.clear();
   });
   return { enabled: !!auth, active, watch };

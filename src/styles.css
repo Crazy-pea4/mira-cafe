@@ -8,6 +8,19 @@
   font-size: 14px;
   color-scheme: dark;
 }
+.storage-loading {
+  min-height: 100dvh;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  padding: 24px;
+  text-align: center;
+}
+.storage-loading button {
+  padding: 10px 18px;
+  border-radius: 8px;
+  background: #b4977040;
+}
 .timing-debug summary {
   list-style: none;
   cursor: pointer;
