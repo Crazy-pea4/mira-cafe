@@ -1,0 +1,183 @@
+{
+  "sourceCommit": "8b297fdca752344ca02e5df8d7c17256d393a1eb",
+  "recordedAt": "2026-10-27T13:14:07.227Z",
+  "captureFinishedAt": "2026-10-27T13:17:41.806732+00:00",
+  "environment": "local Docker at 127.0.0.1:5173; not an online browser recording",
+  "providers": {
+    "dialogue": "DeepSeek",
+    "speech": "Qwen"
+  },
+  "video": {
+    "file": "mira-demo-live.mp4",
+    "durationSeconds": 228.126,
+    "bytes": 27564281,
+    "sha256": "a8d3ccdca46b22c53c62d6ff846374d88b6b1c63b7b8b1e9734ac8960abc1010",
+    "width": 1280,
+    "height": 900,
+    "codecs": [
+      "H.264",
+      "AAC"
+    ],
+    "audioSampleRate": 24000,
+    "meanVolumeDb": -27.3,
+    "peakVolumeDb": -2.6,
+    "fullDecode": "passed"
+  },
+  "formalTake": {
+    "newRequests": {
+      "deepseek": 12,
+      "asr": 1,
+      "tts": 21
+    },
+    "applicationRequests": 12,
+    "completedStoryTurns": 10,
+    "ending": "a",
+    "confirmedFacts": [
+      "arrival",
+      "photo-drift",
+      "phone-message",
+      "commission",
+      "ticket",
+      "people",
+      "memory",
+      "fear",
+      "draft"
+    ],
+    "streamPreviewChanges": 198,
+    "receiptStatuses": [
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200
+    ],
+    "replay": {
+      "count": 86,
+      "turns": 12,
+      "types": [
+        "recording.started",
+        "turn.cancelled",
+        "input.accepted",
+        "reply.started",
+        "subtitle.started",
+        "presentation.confirmed",
+        "turn.completed",
+        "cue.started",
+        "turn.failed"
+      ]
+    },
+    "pageErrors": [],
+    "nativeAudioBuffers": 192
+  },
+  "allDeliveryTakes": {
+    "purpose": "one engineering verification take and one full-story delivery take",
+    "count": 2,
+    "newRequests": {
+      "deepseek": 18,
+      "asr": 2,
+      "tts": 30
+    },
+    "automaticRetakes": 0,
+    "startedAt": "2026-10-27T13:00:21.335Z",
+    "formalStartedAt": "2026-10-27T13:14:07.227Z"
+  },
+  "verification": [
+    "real ASR from disclosed synthetic input; VAD endpoint and real model/TTS response",
+    "actual speech playback interrupted",
+    "one explicitly simulated network failure followed by manual retry",
+    "clear localStorage and reload restores identical SQLite progress without model or audio replay",
+    "replay play/pause/seek/step/close leaves live progress and real provider call counts unchanged"
+  ],
+  "boundaries": {
+    "syntheticSpeechInput": true,
+    "physicalMicrophone": false,
+    "physicalSpeakers": false,
+    "mobilePreview": "static browser screenshots at 390x844 and 320x640; not physical-device proof",
+    "replay": "read-only and silent; provider counts and current story unchanged",
+    "networkFailure": "one browser text request intentionally aborted, then manually retried",
+    "postproduction": "Original real interaction and audio preserved; two labelled 8-second mobile-layout stills appended.",
+    "cloudBillVerified": false,
+    "comfyui": "adapter only; not enabled or actually integrated"
+  },
+  "chapters": [
+    {
+      "title": "Mira Café · 当前版本8b297fd · 本地Docker / 真实DeepSeek与Qwen",
+      "at": 0.04578399658203125
+    },
+    {
+      "title": "01 / 明确开启剧情轨迹记录 · 默认不记录",
+      "at": 6.047783851623535
+    },
+    {
+      "title": "02 / 电话式语音 · 合成测试输入，非真人麦克风 · ASR/模型/TTS均为真实服务",
+      "at": 8.129783868789673
+    },
+    {
+      "title": "03 / 语音耗时 · 首字、TTS首包与实际开播分别计时",
+      "at": 19.66278386116028
+    },
+    {
+      "title": "04 / 自由文字与流式回复 · 校验后驱动角色表演和道具",
+      "at": 27.7227840423584
+    },
+    {
+      "title": "05 / 角色说话时主动打断 · 停止声音并取消后续演出",
+      "at": 37.15678405761719
+    },
+    {
+      "title": "06 / 模拟单次文字请求断网 · 保留失败提示，手动重试",
+      "at": 45.48378396034241
+    },
+    {
+      "title": "07 / 场景随已呈现剧情变化 · 进入照片中的山间旅馆",
+      "at": 55.30878400802612
+    },
+    {
+      "title": "08 / 停止并保存轨迹 · 数据属于当前匿名浏览器身份",
+      "at": 169.85478401184082
+    },
+    {
+      "title": "09 / SQLite恢复 · 清除浏览器缓存后刷新，不重播语音",
+      "at": 172.13878393173218
+    },
+    {
+      "title": "09 / SQLite恢复成功 · localStorage已清空，剧情与场景仍保留",
+      "at": 173.00278401374817
+    },
+    {
+      "title": "10 / 只读无声回放 · 播放、暂停和事件跳转不调用模型/TTS",
+      "at": 181.0117838382721
+    },
+    {
+      "title": "当前版本：流式文字 / 连续语音 / 打断与恢复 / SQLite存档 / 无声轨迹回放",
+      "at": 208.0247838497162
+    },
+    {
+      "title": "Mobile static browser preview 390x844",
+      "at": 212.08
+    },
+    {
+      "title": "Mobile static browser preview 320x640",
+      "at": 220.08
+    }
+  ]
+}
