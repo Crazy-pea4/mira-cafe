@@ -7,7 +7,7 @@
 | 1. 源代码仓库 | [GitHub公开仓库](https://github.com/Crazy-pea4/mira-cafe) | 已公开，特性独立提交 |
 | 2. 演示地址或本地说明 | [线上演示](https://iamm.xyz/mira/) / [本地Docker](DOCKER.md) | 线上需共享邀请密码，私下提供；不含注册体系 |
 | 3. 一条命令启动 | `docker compose up --build -d --wait` | 默认无密钥Mock，依赖Docker Desktop；首次下载受网络影响 |
-| 4. 3–5分钟演示录屏 | [3分48秒MP4](https://github.com/Crazy-pea4/mira-cafe/releases/download/demo-2026-10-27/mira-demo-live.mp4) / [Release](https://github.com/Crazy-pea4/mira-cafe/releases/tag/demo-2026-10-27) | 当前版本，含文字/语音、角色状态与场景、说话中打断、动画和失败重试 |
+| 4. 3–5分钟演示录屏 | [3分48秒MP4](https://github.com/Crazy-pea4/mira-cafe/releases/download/demo-2026-10-27/mira-demo-live.mp4) / [Release](https://github.com/Crazy-pea4/mira-cafe/releases/tag/demo-2026-10-27) | 当前版本；匿名下载与SHA复核通过，含文字/语音、状态/场景、说话中打断、动画和失败重试 |
 | 5. README | [项目说明](../README.md) | 包含结构、模块、语音/打断、指令、服务/素材、取舍、已知问题、投入及两周计划 |
 | 6. AI_USAGE | [简要说明](../AI_USAGE.md) | 工具、参与工作、人工验证及发现/修正实例四项 |
 

@@ -2,6 +2,8 @@
 
 2026-10-27新版，应用源码`8b297fd`。[下载MP4](https://github.com/Crazy-pea4/mira-cafe/releases/download/demo-2026-10-27/mira-demo-live.mp4) · [Release与SHA256](https://github.com/Crazy-pea4/mira-cafe/releases/tag/demo-2026-10-27) · [脱敏元数据](release/demo-20261027.json)。
 
+Release已公开，并使用不带登录凭据的HTTPS下载完成复核：27564281字节，SHA256与本机正式视频一致。
+
 视频228.126秒（约3分48秒），1280×900，H.264/AAC，音频24kHz。文件27564281字节，SHA256：
 
 ```text
