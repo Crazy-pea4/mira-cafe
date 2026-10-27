@@ -5,7 +5,7 @@ import { ReplayRepository } from '../server/replays';
 import { buildApp } from '../server/app';
 import { MockProvider } from '../server/providers';
 import { ConversationEngine } from '../src/core/engine';
-import { ReplayPlayer, ReplayRecorder, type ReplayApi } from '../src/core/replay';
+import { HttpReplayApi, ReplayPlayer, ReplayRecorder, type ReplayApi } from '../src/core/replay';
 import { ReplayPanel } from '../src/ReplayPanel';
 import { replayFrame, replayDataSchema, REPLAY_ASSET_VERSION, type ReplayData, type ReplayEvent, type ReplaySummary } from '../shared/replay';
 import type { Transport } from '../src/core/transport';
@@ -75,6 +75,24 @@ describe('SQLite replay event ownership, ordering and retention', () => {
       const cross = await app.inject({ url: '/api/replays', method: 'POST', headers: { ...headers, cookie, origin: 'http://evil.test' }, payload: { id, frame: frame() } });
       expect(cross.statusCode).toBe(403); expect(reply).not.toHaveBeenCalled();
     } finally { await app.close(); db.close(); }
+  });
+});
+
+describe('bounded replay connection recovery', () => {
+  it('retries a network timeout once and shows a readable failure after the deadline', async () => {
+    vi.useFakeTimers();
+    const fetcher = vi.fn((_url: string, options: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      options.signal!.addEventListener('abort', () => reject(new DOMException('signal is aborted without reason', 'AbortError')), { once: true });
+    }));
+    vi.stubGlobal('fetch', fetcher);
+    const assertion = expect(new HttpReplayApi().list()).rejects.toThrow('轨迹连接超时或网络不可用，请重新打开面板后重试。');
+    await vi.advanceTimersByTimeAsync(12000); await assertion;
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it('does not retry an expired invitation as a network failure', async () => {
+    const fetcher = vi.fn(async () => new Response('{}', { status: 401 })); vi.stubGlobal('fetch', fetcher);
+    await expect(new HttpReplayApi().list()).rejects.toThrow('邀请已过期');
+    expect(fetcher).toHaveBeenCalledOnce();
   });
 });
 

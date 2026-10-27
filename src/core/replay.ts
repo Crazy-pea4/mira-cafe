@@ -25,7 +25,9 @@ export class HttpReplayApi implements ReplayApi {
         }
         return await response.json();
       } catch (error) {
-        if (attempt === 0 && (isAbort(error) || error instanceof TypeError)) continue;
+        const networkFailure = isAbort(error) || error instanceof TypeError;
+        if (attempt === 0 && networkFailure) continue;
+        if (networkFailure) throw new Error('轨迹连接超时或网络不可用，请重新打开面板后重试。');
         throw error;
       } finally { clearTimeout(timer); }
     }

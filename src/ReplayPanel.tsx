@@ -90,7 +90,7 @@ export function ReplayPanel({ api, recorder, snapshot, busy }: { api: ReplayApi;
       <div className="replay-dialog-heading"><h2 id="replay-title">剧情轨迹</h2><button type="button" onClick={close}>关闭轨迹</button></div>
       <p className="replay-intro">明确开启后才记录对白与画面事件，保存在当前浏览器身份对应的数据库中。默认无声回放，不重新调用模型或语音服务。</p>
       <div className="replay-toolbar">
-        <button type="button" disabled={busy || recording.saving || recording.recording} onClick={() => {
+        <button type="button" disabled={busy || loading || recording.saving || recording.recording} onClick={() => {
           void recorder.start(replayFrame(snapshot)).then(() => { if (recorder.getSnapshot().recording) close(); });
         }}>开始记录当前剧情</button>
         <span>最多保留5段，每段50轮或1000个事件</span>
