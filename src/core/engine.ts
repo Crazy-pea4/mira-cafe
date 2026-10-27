@@ -27,6 +27,7 @@ import {
 import type { Transport } from './transport';
 import type { ProgressStorage } from './progress-storage';
 import { guidedSuggestions } from '../../shared/story-progression';
+import type { ReplayEventType } from '../../shared/replay';
 export interface Snapshot {
   propFocus: PropFocus;
   suggestions: string[];
@@ -76,6 +77,7 @@ const INITIAL: Snapshot = {
 export class ConversationEngine {
   private snapshot: Snapshot = { ...INITIAL };
   private listeners = new Set<() => void>();
+  private presentationListeners = new Set<(type: ReplayEventType, turnId: number, snapshot: Snapshot) => void>();
   private controller?: AbortController;
   private history: History = [];
   private committedProps: StageProps = { ...INITIAL_PROPS };
@@ -140,6 +142,15 @@ export class ConversationEngine {
       this.listeners.delete(listener);
     };
   };
+  onPresentation(listener: (type: ReplayEventType, turnId: number, snapshot: Snapshot) => void) {
+    this.presentationListeners.add(listener);
+    return () => { this.presentationListeners.delete(listener); };
+  }
+  private observe(type: ReplayEventType, turnId = this.snapshot.turnId) {
+    for (const listener of this.presentationListeners) {
+      try { listener(type, turnId, this.snapshot); } catch { /* Recording cannot stop the live interaction. */ }
+    }
+  }
   private update(patch: Partial<Snapshot>) {
     this.snapshot = { ...this.snapshot, ...patch };
     for (const listener of this.listeners) listener();
@@ -155,6 +166,7 @@ export class ConversationEngine {
   }
   private stopTurn(listening: boolean, preserveSubtitle: boolean) {
     const previous = this.snapshot.turnId;
+    const wasActive = ['thinking', 'speaking', 'narrating', 'listening'].includes(this.snapshot.status);
     // Invalidate synchronously before abort callbacks or any network work can run.
     this.update({
       propFocus: 'none',
@@ -178,6 +190,7 @@ export class ConversationEngine {
     this.controller?.abort();
     this.controller = undefined;
     this.audio.stop();
+    if (wasActive) this.observe('turn.cancelled', previous);
     if (previous) void this.transport.cancel(this.sessionId, previous).catch(() => {});
   }
   inputNotice(message: string) {
@@ -196,6 +209,8 @@ export class ConversationEngine {
     const signal = controller.signal;
     const current = () => this.snapshot.turnId === turnId && !signal.aborted;
     this.update({ status: 'thinking', lastInput: trimmed });
+    this.observe('input.accepted');
+    this.observe('reply.started');
     const priorHistory = this.history.slice(-12);
     const userEntry: History[number] = { role: 'user', content: trimmed };
     let assistantEntry: History[number] | undefined;
@@ -247,6 +262,7 @@ export class ConversationEngine {
             location: locationAfterCue(this.committedLocation, unit.cue),
             ...(unit.cue.kind === 'reply-sent' ? { scene: 'warm' as const } : {}),
           });
+          this.observe('cue.started');
           await delay(this.narrationMs(unit.text), signal);
           if (!current()) return;
           this.committedProps = applyCue(this.committedProps, unit.cue);
@@ -270,6 +286,7 @@ export class ConversationEngine {
                 ? { photo: true, propFocus: 'photo' as const }
                 : {}),
             });
+            this.observe('subtitle.started');
           };
           try {
             this.update({ pendingAudio: true });
@@ -336,6 +353,7 @@ export class ConversationEngine {
               });
               this.checkpoint = receipt.checkpoint;
               this.saveProgress();
+              this.observe('presentation.confirmed');
             }
           } catch (error) {
             if (current())
@@ -347,6 +365,7 @@ export class ConversationEngine {
                 notice:
                   error instanceof Error ? error.message : '对白暂时没有同步，请刷新恢复存档。',
               });
+            if (current()) this.observe('turn.failed');
             return;
           }
         }
@@ -362,6 +381,7 @@ export class ConversationEngine {
           completed: this.snapshot.completed + 1,
         });
         this.saveProgress();
+        this.observe('turn.completed');
       }
     } catch (error) {
       if (!current() || isAbort(error)) return;
@@ -373,6 +393,7 @@ export class ConversationEngine {
         action: 'idle',
         error: error instanceof Error ? error.message : '连接失败，请重试。',
       });
+      this.observe('turn.failed');
     } finally {
       receiving = false;
       // Pending/failed user turns were never committed; neither rapid input
@@ -392,6 +413,7 @@ export class ConversationEngine {
     this.committedProps = { ...INITIAL_PROPS };
     this.committedLocation = 'cafe';
     this.update({ ...INITIAL, turnId: this.snapshot.turnId });
+    this.observe('story.reset');
     if (this.transport.reset) void this.transport.reset().catch(() => {
       this.update({ saveNotice: '服务端进度暂时未能重置，请刷新后重试。' });
     });
@@ -404,5 +426,6 @@ export class ConversationEngine {
   dispose() {
     this.interrupt();
     this.listeners.clear();
+    this.presentationListeners.clear();
   }
 }

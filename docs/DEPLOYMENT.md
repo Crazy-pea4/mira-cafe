@@ -4,7 +4,7 @@
 
 ## 运行结构
 
-既有阿里云ECS上使用Node单进程和systemd，监听127.0.0.1:3001，由现有nginx的精确iamm.xyz主机代理/mira。www、根站、8787应用和80保持原行为。无需Docker、数据库、PM2或新端口。
+既有阿里云ECS上使用Node单进程和systemd，监听127.0.0.1:3001，由现有nginx的精确iamm.xyz主机代理/mira。www、根站、8787应用和80保持原行为。使用Node 22.13以上的内置SQLite，不新增Docker、独立数据库服务、PM2或端口。
 
 | 位置                                  | 用途                        |
 | ------------------------------------- | --------------------------- |
@@ -33,15 +33,19 @@ npm ci --omit=dev --ignore-scripts --registry=https://registry.npmjs.org
 
 首次设置已完成。密码哈希通过AES-256-GCM加密、RSA-OAEP-SHA256封装后传输；接收私钥只留服务器，导入后删除。工具为`scripts/deploy-transport.mjs`，不把密码、key或仅base64的秘密写入CLI参数。
 
-登录同源POST校验scrypt哈希，8小时不透明服务端会话，Cookie路径/mira/，Secure、HttpOnly、SameSite=Strict。页面、JS/CSS、图片、工作线程、API和WS共用鉴权；右上“离开咖啡馆”撤销会话。共享邀请没有完整个人账号；重启服务撤销旧会话。
+登录同源POST校验scrypt哈希，8小时不透明服务端会话，Cookie路径/mira/，Secure、HttpOnly、SameSite=Strict。页面、JS/CSS、图片、工作线程、API和WS共用鉴权；右上“离开咖啡馆”撤销会话。共享邀请没有完整个人账号；SQLite保存8小时内仍有效的登录，重启不撤销，退出立即撤销，密码更换后旧会话失效。匿名身份Cookie将不同浏览器的数据隔离。
 
 写操作和WS要求精确Origin/Host。服务不记录密码、Cookie、Authorization或请求体，诊断仅保留白名单结构信息。公网缺少邀请哈希或任一真实provider时拒绝启动，不静默变成Mock；本地Mock仍无需密钥。
+
+## 数据与备份
+
+数据库在/var/lib/mira-cafe/mira.sqlite，状态目录700、数据库600，不随release替换。启动执行事务迁移并幂等导入旧统计，旧JSON与防重复收费记录不删除。运行中使用SQLite一致性备份API，或停服并完成检查点后备份；不能只复制主文件忽略WAL。备份含会话对白，保持受限权限。
 
 ## 故障和回滚
 
 ready标记缺失时，nginx对Mira入口返回503，systemd条件也不允许启动。撤下入口时只移除Mira标记并停止Mira服务；不要删除其他项目、状态记录或改支付设置。
 
-回滚时在锁定状态将current指向保留的已验证release，检查配置和素材权限后恢复标记并启动。若修改nginx，必须备份、`nginx -t`通过后再reload，并核对根站、www和已有路径；普通应用更新不需要reload。
+回滚时在锁定状态将current指向保留的已验证release，检查配置和素材权限后恢复标记并启动。回滚到引入SQLite之前的旧代码会重新使用旧文件统计，不能将其视为数据库数据回滚；须保留数据库和迁移前文件，停止收费请求后人工核对统计。若修改nginx，必须备份、`nginx -t`通过后再reload，并核对根站、www和已有路径；普通应用更新不需要reload。
 
 ## 检查与仍需真人验证
 

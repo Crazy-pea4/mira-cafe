@@ -1,0 +1,247 @@
+.replay-dialog {
+  width: min(1040px, calc(100vw - 24px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 22px;
+  border: 1px solid #b4977066;
+  border-radius: 14px;
+  color: #eee1ce;
+  background: #191d29;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.replay-dialog::backdrop {
+  background: #080b14cc;
+  backdrop-filter: blur(5px);
+}
+.replay-dialog-heading,
+.replay-toolbar,
+.replay-library li,
+.replay-controls,
+.replay-export {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.replay-dialog-heading {
+  justify-content: space-between;
+}
+.replay-dialog h2 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 500;
+}
+.replay-dialog button {
+  padding: 8px 12px;
+  border: 1px solid #a78e6955;
+  border-radius: 7px;
+  background: #b4977022;
+  font-size: 12px;
+}
+.replay-dialog button:disabled {
+  opacity: 0.45;
+}
+.replay-intro,
+.replay-toolbar span,
+.replay-empty,
+.replay-export span {
+  color: #bcb5ab;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.replay-toolbar {
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.replay-library {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.replay-library li {
+  padding: 10px;
+  border: 1px solid #b4977033;
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+.replay-library li > div {
+  flex: 1;
+  min-width: 140px;
+}
+.replay-library strong,
+.replay-library small {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+}
+.replay-library small {
+  color: #aaa59c;
+  font-size: 10px;
+  margin-top: 3px;
+}
+.replay-export {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding: 12px 0;
+}
+.replay-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 16px;
+}
+.replay-player {
+  min-width: 0;
+}
+.replay-preview {
+  height: 310px;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #101521;
+}
+.replay-background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.replay-preview.scene-warm .replay-background {
+  filter: sepia(0.1) brightness(1.06);
+}
+.replay-watermark {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 4;
+  background: #101521c9;
+  border-radius: 5px;
+  padding: 5px 8px;
+  font-size: 10px;
+}
+.replay-character {
+  position: absolute;
+  right: 0;
+  bottom: -8px;
+  width: 240px;
+  height: 360px;
+}
+.replay-character .character-portrait {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.replay-props {
+  position: absolute;
+  z-index: 3;
+  left: 12px;
+  bottom: 12px;
+  width: min(48%, 200px);
+}
+.replay-props .story-moment {
+  position: static;
+  display: block;
+  transform: none;
+  padding: 0;
+}
+.replay-props .story-photograph,
+.replay-props .story-phone {
+  width: 100%;
+  margin: 0;
+}
+.replay-caption {
+  padding: 12px 0;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.replay-caption p {
+  margin: 6px 0;
+}
+.replay-caption small {
+  color: #bcb5ab;
+  font-size: 11px;
+}
+.replay-narration {
+  color: #cebc9f;
+}
+.replay-controls {
+  flex-wrap: wrap;
+}
+.replay-controls span {
+  font-size: 11px;
+  color: #bcb5ab;
+  font-variant-numeric: tabular-nums;
+}
+.replay-seek {
+  width: 100%;
+  margin: 12px 0;
+  accent-color: #d8b789;
+}
+.replay-events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  max-height: 550px;
+  overflow-y: auto;
+}
+.replay-events button {
+  width: 100%;
+  text-align: left;
+  min-width: 0;
+}
+.replay-events button[aria-current='step'] {
+  background: #b4977040;
+  border-color: #d8b789;
+}
+.replay-events small {
+  display: block;
+  font-size: 10px;
+  color: #bcb5ab;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+.replay-open.is-recording {
+  color: #f0ae9b;
+  border-color: #d28f79;
+}
+@media (max-width: 640px) {
+  .replay-dialog {
+    padding: 14px;
+  }
+  .replay-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .replay-preview {
+    height: 240px;
+  }
+  .replay-character {
+    width: 190px;
+    height: 285px;
+  }
+  .replay-events {
+    max-height: 230px;
+  }
+  .replay-events small {
+    max-width: 230px;
+  }
+}
+@media (max-width: 520px) {
+  .app .topbar .leave-cafe {
+    font-size: 9px;
+    padding: 7px 6px;
+  }
+}
+@media (max-width: 420px) {
+  .app .topbar .brand > span:last-child,
+  .timing-wide {
+    display: none;
+  }
+}

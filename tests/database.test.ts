@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -45,7 +45,7 @@ describe('SQLite storage, migrations and isolation', () => {
       new RequestAudit(db).record('deepseek', new AbortController().signal);
       db.close(); db = new AppDatabase(file); db.importLegacy(dir);
       expect(db.read().requests.deepseek).toBe(3);
-      expect(db.sql.prepare('SELECT count(*) AS count FROM schema_migrations').get()?.count).toBe(1);
+      expect(db.sql.prepare('SELECT count(*) AS count FROM schema_migrations').get()?.count).toBe(2);
     } finally { db.close(); }
   });
 
@@ -121,6 +121,25 @@ describe('SQLite storage, migrations and isolation', () => {
       expect(() => db.save(first, state, progress, { key: 'b', user: '过时输入', assistant: '过时输出' })).toThrow(StorageConflict);
       expect(db.sql.prepare('SELECT count(*) AS count FROM conversation_messages').get()?.count).toBe(2);
     } finally { db.close(); }
+  });
+
+  it('rejects stale pages before calling the model when another page advances or resets progress', async () => {
+    const db = new AppDatabase(':memory:'), provider = new MockProvider(), model = vi.spyOn(provider, 'reply');
+    const app = buildApp(provider, 18000, undefined, undefined, { basePath: '' }, 'test-save-key', db), first = client(app);
+    try {
+      await first.request('/api/progress');
+      const second = client(app, first.cookie()), otherTurn = { ...turn, sessionId: '33333333-3333-4333-8333-333333333333' };
+      await first.request('/api/turn', 'POST', turn);
+      await second.request('/api/turn', 'POST', otherTurn);
+      await second.request('/api/presented', 'POST', { sessionId: otherTurn.sessionId, turnId: 1, through: 1 });
+      const saved = (await second.request('/api/progress')).json().progress;
+      const calls = model.mock.calls.length;
+      expect((await first.request('/api/turn', 'POST', { ...turn, turnId: 2 })).statusCode).toBe(409);
+      expect(model).toHaveBeenCalledTimes(calls);
+      await second.request('/api/progress', 'DELETE');
+      expect((await first.request('/api/turn', 'POST', { ...turn, sessionId: '44444444-4444-4444-8444-444444444444', checkpoint: saved.checkpoint })).statusCode).toBe(409);
+      expect(model).toHaveBeenCalledTimes(calls);
+    } finally { await app.close(); db.close(); }
   });
 
   it('stores bounded numeric timing history by visitor and rejects unexpected text fields', async () => {

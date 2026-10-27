@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { initialStorage } from './migrations/001-storage';
+import { replayStorage } from './migrations/002-replay';
 import { auditStateSchema, AuditStoreError, type AuditStore, type Ledger } from './request-audit';
 import { safeReplyDiagnostic, type ReplyDiagnostic } from './reply-diagnostics';
 import { newStory, type StoryState } from './story';
@@ -18,12 +19,14 @@ export class AppDatabase implements AuditStore {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.sql = new DatabaseSync(path, { timeout: 1500 });
     if (path !== ':memory:') chmodSync(path, 0o600);
-    this.sql.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;');
+    this.sql.exec('PRAGMA busy_timeout=1500; PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;');
     this.sql.exec('CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL) STRICT');
-    if (!this.sql.prepare('SELECT 1 FROM schema_migrations WHERE version=1').get()) this.transaction(() => {
-      this.sql.exec(initialStorage);
-      this.sql.prepare('INSERT INTO schema_migrations VALUES(1,?)').run(Date.now());
-    });
+    for (const [version, sql] of [[1, initialStorage], [2, replayStorage]] as const)
+      if (!this.sql.prepare('SELECT 1 FROM schema_migrations WHERE version=?').get(version)) this.transaction(() => {
+        if (this.sql.prepare('SELECT 1 FROM schema_migrations WHERE version=?').get(version)) return;
+        this.sql.exec(sql);
+        this.sql.prepare('INSERT INTO schema_migrations VALUES(?,?)').run(version, Date.now());
+      });
     this.sql.prepare('DELETE FROM auth_sessions WHERE expires_at<=?').run(Date.now());
   }
   close() { this.sql.close(); }

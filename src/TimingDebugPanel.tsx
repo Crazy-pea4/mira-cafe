@@ -24,7 +24,7 @@ export function TimingDebugPanel({ timing }: { timing: InteractionTiming }) {
   const firstAudio = latestModel?.turnId === undefined ? undefined : firstReplyAudioMs(records, latestModel.turnId);
   return (
     <details className="timing-debug">
-      <summary aria-label="语音耗时调试面板">语音耗时</summary>
+      <summary aria-label="语音耗时调试面板"><span className="timing-wide">语音</span>耗时</summary>
       <section className="timing-panel" aria-label="语音耗时详情">
         <div className="timing-heading">
           <h2>语音耗时</h2>

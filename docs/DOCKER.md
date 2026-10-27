@@ -1,6 +1,6 @@
 # 本地 Docker 开发环境
 
-2026-10-27。本地使用 Docker Compose；云服务器继续沿用 Node.js、systemd 和 nginx，发布流程见 [DEPLOYMENT](DEPLOYMENT.md)。不新增数据库、Redis、ComfyUI 或 GPU 服务。
+2026-10-27。本地使用 Docker Compose；云服务器继续沿用 Node.js、systemd 和 nginx，发布流程见 [DEPLOYMENT](DEPLOYMENT.md)。SQLite使用Node内置驱动，不新增独立数据库、Redis、ComfyUI 或 GPU 服务。
 
 ## 一条命令启动
 
@@ -43,7 +43,7 @@ docker compose restart app
 docker compose down
 ```
 
-签名存档密钥与尽力用量统计保存在`mira-cafe_state`命名卷。普通重启、重建和`down`保留它，不使用`down -v`；内存会话可由浏览器签名检查点恢复。
+SQLite数据库（匿名身份、邀请会话、确认剧情、消息、统计与轨迹）及签名密钥保存在`mira-cafe_state`命名卷。普通重启、重建和`down`保留它，不使用`down -v`；页面通过身份Cookie恢复数据库进度，未完成回复不保存；localStorage只作缓存。
 
 原宿主机`.local`保持独立，不挂载或覆盖；浏览器localStorage按站点和端口隔离，旧3001/3002入口的存档不会自动迁移到5173。仍可按README中的Node启动方式做诊断。
 

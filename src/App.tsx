@@ -27,6 +27,8 @@ import { PcmSpeechPlayer } from './core/pcm-playback';
 import { loadServerProgress } from './core/server-progress';
 import { persistTimings } from './core/persist-timings';
 import type { SavedProgress } from '../shared/progress';
+import { HttpReplayApi, ReplayRecorder } from './core/replay';
+import { ReplayPanel } from './ReplayPanel';
 const STATUS = {
   idle: '在等你开口',
   listening: '正在倾听',
@@ -55,12 +57,13 @@ export function App() {
   return <Scene initialProgress={loaded.progress} initialNotice={loaded.notice} />;
 }
 export function Scene({ initialProgress, initialNotice }: { initialProgress: SavedProgress | null; initialNotice: string }) {
-  const [{ engine, audio, entry, call, timing }] = useState(() => {
+  const [{ engine, audio, entry, call, timing, replayApi, recorder }] = useState(() => {
     const timing = new InteractionTiming();
     const speech = new LocalSpeechTransport(undefined, undefined, timing);
     const audio = new SceneAudio(undefined, new PcmSpeechPlayer(speech), timing),
       voice = new VoiceInput(speech);
     const entry = new VoiceEntry(voice, prepareMicrophone);
+    const replayApi = new HttpReplayApi();
     return {
       engine: new ConversationEngine(
         new HttpTransport(timing, true),
@@ -74,12 +77,21 @@ export function Scene({ initialProgress, initialNotice }: { initialProgress: Sav
       entry,
       call: new VoiceCall(speech),
       timing,
+      replayApi,
+      recorder: new ReplayRecorder(replayApi),
     };
   });
   const state = useSyncExternalStore(engine.subscribe, engine.getSnapshot, engine.getSnapshot);
   const input = useSyncExternalStore(entry.subscribe, entry.getSnapshot, entry.getSnapshot);
   const callState = useSyncExternalStore(call.subscribe, call.getSnapshot, call.getSnapshot);
+  const recording = useSyncExternalStore(recorder.subscribe, recorder.getSnapshot, recorder.getSnapshot);
   useEffect(() => persistTimings(timing), [timing]);
+  useEffect(() => {
+    const unsubscribe = engine.onPresentation((type, turnId, snapshot) => recorder.capture(type, turnId, snapshot));
+    const leave = () => { engine.suspend(); recorder.suspend(); };
+    window.addEventListener('pagehide', leave);
+    return () => { engine.suspend(); recorder.suspend(); unsubscribe(); window.removeEventListener('pagehide', leave); };
+  }, [engine, recorder]);
   const voiceButton = voiceButtonView(input);
   const sceneRef = useRef<HTMLElement>(null),
     hudRef = useRef<HTMLElement>(null),
@@ -215,6 +227,7 @@ export function Scene({ initialProgress, initialNotice }: { initialProgress: Sav
         <div className="top-actions">
           <ModeBadge provider={provider} />
           <TimingDebugPanel timing={timing} />
+          <ReplayPanel api={replayApi} recorder={recorder} snapshot={state} busy={active || input.phase !== 'idle' || callState.active} />
           <button
             className="reset-story leave-cafe"
             type="button"
@@ -372,6 +385,7 @@ export function Scene({ initialProgress, initialNotice }: { initialProgress: Sav
                 {state.saveNotice}
               </div>
             )}
+            {recording.notice && <div className="notice" role="status">{recording.notice}</div>}
             {initialNotice && <div className="notice" role="status">{initialNotice}</div>}
             {state.location === 'lodge' && backgroundStatus !== 'ready' && (
               <div className="notice scene-notice" role="status">

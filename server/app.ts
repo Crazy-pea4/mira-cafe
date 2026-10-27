@@ -26,6 +26,7 @@ import { AppDatabase, StorageConflict, type StoredConversation } from './databas
 import { confirmedProgress } from './persisted-progress';
 import { progressSchema } from '../shared/progress';
 import { timingBatchSchema } from '../shared/timing';
+import { registerReplays } from './replays';
 type Session = {
   owner: string | null;
   latest: number;
@@ -83,6 +84,7 @@ export function buildApp(
     return session;
   }
   if (database) {
+    registerReplays(app, database, deployment.basePath, scope);
     app.setErrorHandler((error, _request, reply) => {
       const status = (error as { statusCode?: number }).statusCode;
       return reply.code(status === 400 || status === 413 ? status : 503).send({ error: { code: 'STORAGE_UNAVAILABLE', message: '数据暂时无法处理，请刷新后重试。' } });
@@ -137,7 +139,7 @@ export function buildApp(
     speechAvailable: !!speechProvider,
     usagePolicy: { localLimits: false },
     ...(audit ? { usage: audit.status() } : {}),
-    ...(database ? { storage: { engine: 'sqlite', schemaVersion: 1 } } : {}),
+    ...(database ? { storage: { engine: 'sqlite', schemaVersion: 2 } } : {}),
   }));
   app.post(path('api/cancel'), async (request, reply) => {
     const parsed = cancelSchema.safeParse(request.body);
@@ -211,6 +213,12 @@ export function buildApp(
     const stale = () =>
       reply.code(409).send({ error: { code: 'STALE_TURN', message: '这轮对话已经结束。' } });
     if (input.turnId <= session.latest) return stale();
+    if (database && session.owner) {
+      const current = database.current(session.owner, scope);
+      const changed = session.started && session.stored && (session.stored.id !== current.id || session.stored.revision !== current.revision);
+      const oldReset = !session.started && !!input.checkpoint && !current.progress && !database.canImport(session.owner, scope);
+      if (changed || oldReset) return reply.code(409).send({ error: { code: 'PROGRESS_CHANGED', message: '其他页面已更新或重置进度，请刷新后继续。' } });
+    }
     // A microphone press / page cleanup may have sent cancellation before the
     // first turn. That tombstone must not prevent checkpoint hydration.
     if (!session.started && restored && !session.stored) session.story = restored;
